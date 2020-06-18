@@ -3,17 +3,13 @@ package main
 type Header struct{ Name, Value string }
 type Headers []Header
 
-func (hs Headers) GetDefault(name string, defaultValue string) string {
+func (hs Headers) Get(name string) (value string, ok bool) {
 	for i := range hs {
 		if hs[i].Name == name {
-			return hs[i].Value
+			return hs[i].Value, true
 		}
 	}
-	return defaultValue
-}
-
-func (hs Headers) Get(name string) string {
-	return hs.GetDefault(name, "")
+	return "", false
 }
 
 func (hs Headers) Copy() Headers {

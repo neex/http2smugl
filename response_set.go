@@ -18,8 +18,8 @@ func (rs *ResponseSet) AccountRequest(headers Headers, body []byte) {
 		rs.minLength = length
 		rs.maxLength = length
 	}
-	status := headers.Get(":status")
-	if status == "" {
+	status, ok := headers.Get(":status")
+	if !ok {
 		status = "<error>"
 	}
 	rs.statuses[status] = struct{}{}

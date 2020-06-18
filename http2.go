@@ -13,52 +13,64 @@ import (
 )
 
 type RequestParams struct {
-	target, method, connectAddr string
-	headers                     Headers
-	body                        []byte
-	timeout                     time.Duration
+	Target, Method, ConnectAddr string
+	Headers                     Headers
+	NoAutoHeaders, NoTLS        bool
+	Body                        []byte
+	Timeout                     time.Duration
 }
 
 func DoRequest(params *RequestParams) (Headers, []byte, error) {
-	parsed, err := url.Parse(params.target)
+	parsed, err := url.Parse(params.Target)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if parsed.Scheme != "https" {
-		return nil, nil, fmt.Errorf("scheme is %#v, but https is required", parsed.Scheme)
+	expectedScheme := "https"
+	if params.NoTLS {
+		expectedScheme = "http"
+	}
+	if parsed.Scheme != expectedScheme {
+		return nil, nil, fmt.Errorf("scheme is %#v, but %#v is required", parsed.Scheme, expectedScheme)
 	}
 
-	requestHeaders := Headers{
-		{":authority", params.headers.GetDefault(":authority", parsed.Host)},
-		{":method", params.headers.GetDefault(":method", params.method)},
-		{":path", params.headers.GetDefault(":path", parsed.Path)},
-		{":scheme", params.headers.GetDefault(":scheme", parsed.Scheme)},
-		{"user-agent", params.headers.GetDefault("user-agent", "Mozilla/5.0")},
-	}
+	var headers Headers
 
-	toSkip := map[string]struct{}{
-		":authority": {},
-		":method":    {},
-		":path":      {},
-		":scheme":    {},
-		"user-agent": {},
-	}
-
-	for _, h := range params.headers {
-		if _, ok := toSkip[h.Name]; ok {
-			delete(toSkip, h.Name)
-			continue
+	if params.NoAutoHeaders {
+		headers = params.Headers
+	} else {
+		headers = Headers{
+			{":authority", parsed.Host},
+			{":method", params.Method},
+			{":path", parsed.Path},
+			{":scheme", parsed.Scheme},
+			{"user-agent", "Mozilla/5.0"},
 		}
-		requestHeaders = append(requestHeaders, h)
+
+		toSkip := make(map[string]struct{})
+		for i := range headers {
+			h := &headers[i]
+			if v, ok := params.Headers.Get(h.Name); ok {
+				h.Value = v
+				toSkip[h.Name] = struct{}{}
+			}
+		}
+
+		for _, h := range params.Headers {
+			if _, ok := toSkip[h.Name]; ok {
+				delete(toSkip, h.Name)
+				continue
+			}
+			headers = append(headers, h)
+		}
 	}
 
-	targetAddr := params.connectAddr
+	targetAddr := params.ConnectAddr
 	if targetAddr == "" {
 		targetAddr = parsed.Host
 	}
 
-	return sendPreparedRequest(targetAddr, parsed.Host, prepareRequest(requestHeaders, params.body), params.timeout)
+	return sendPreparedRequest(targetAddr, parsed.Host, params.NoTLS, prepareRequest(headers, params.Body), params.Timeout)
 }
 
 func prepareRequest(headers Headers, body []byte) []byte {
@@ -105,7 +117,7 @@ func prepareRequest(headers Headers, body []byte) []byte {
 	return requestBuf.Bytes()
 }
 
-func sendPreparedRequest(connectAddr, serverName string, request []byte, timeout time.Duration) (headers Headers, body []byte, err error) {
+func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []byte, timeout time.Duration) (headers Headers, body []byte, err error) {
 	address := connectAddr
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
 		address = net.JoinHostPort(address, "443")
@@ -119,11 +131,17 @@ func sendPreparedRequest(connectAddr, serverName string, request []byte, timeout
 	defer func() { _ = tcpConn.Close() }()
 	_ = tcpConn.SetDeadline(time.Now().Add(timeout))
 
-	c := tls.Client(tcpConn, &tls.Config{
-		NextProtos:         []string{"h2"},
-		ServerName:         serverName,
-		InsecureSkipVerify: true,
-	})
+	var c net.Conn
+
+	if noTLS {
+		c = tcpConn
+	} else {
+		c = tls.Client(tcpConn, &tls.Config{
+			NextProtos:         []string{"h2"},
+			ServerName:         serverName,
+			InsecureSkipVerify: true,
+		})
+	}
 
 	if _, err := c.Write(request); err != nil {
 		return nil, nil, err

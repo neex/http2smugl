@@ -46,12 +46,12 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 		for err != nil && triesLeft > 0 {
 			triesLeft--
 			headers, body, err = DoRequest(&RequestParams{
-				target:      params.Target,
-				method:      params.RequestMethod,
-				connectAddr: connectTo,
-				headers:     request.Headers,
-				body:        request.Body,
-				timeout:     timeout,
+				Target:      params.Target,
+				Method:      params.RequestMethod,
+				ConnectAddr: connectTo,
+				Headers:     request.Headers,
+				Body:        request.Body,
+				Timeout:     timeout,
 			})
 
 			if err != nil && verbose {

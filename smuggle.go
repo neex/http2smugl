@@ -67,7 +67,7 @@ func (s SmugglingMethod) GetVariants(path string) (variants []interface{}) {
 		return []interface{}{nil}
 
 	case HeaderSmugglingSpacedHeader:
-		return []interface{}{" ", "\t", "\v", "\u00A0", "\U000130BA"}
+		return []interface{}{"\x00", " ", "\t", "\v", "\u0085", "\u00A0", "\U000130BA"}
 
 	case HeaderSmugglingNewlineName:
 		for _, nl := range newlines {
