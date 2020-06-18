@@ -10,14 +10,13 @@ type DetectRequestParams struct {
 type DetectMethod string
 
 const (
-	DetectContentLengthParsing    = "detect content length parsing"
-	DetectTransferEncodingParsing = "detect transfer encoding parsing"
-	DetectChunkedBodyConsumption  = "detect chunked body consumption"
-	DetectChunkedBodyValidation   = "detect chunked body validation"
+	DetectContentLengthParsing   = "detect content length parsing"
+	DetectChunkedBodyConsumption = "detect chunked body consumption"
+	DetectChunkedBodyValidation  = "detect chunked body validation"
 )
 
 var DetectMethods = []DetectMethod{
-	DetectContentLengthParsing, DetectTransferEncodingParsing, DetectChunkedBodyValidation, DetectChunkedBodyConsumption,
+	DetectContentLengthParsing, DetectChunkedBodyValidation, DetectChunkedBodyConsumption,
 }
 
 func (d DetectMethod) GetHeaders(sm SmugglingMethod, smuggleVariant interface{}) (valid, invalid DetectRequestParams) {
@@ -28,15 +27,6 @@ func (d DetectMethod) GetHeaders(sm SmugglingMethod, smuggleVariant interface{})
 		}
 		valid.Headers = Headers{{"content-length", "0"}}
 		invalid.Headers = Headers{{"content-length", "-1"}}
-		sm.Smuggle(&valid.Headers[0], smuggleVariant)
-		sm.Smuggle(&invalid.Headers[0], smuggleVariant)
-
-	case DetectTransferEncodingParsing:
-		if sm == HeaderSmugglingNone {
-			panic(fmt.Errorf("cannot use %#v with %#v", smuggleVariant, d))
-		}
-		valid.Headers = Headers{{"transfer-encoding", "chunked"}}
-		invalid.Headers = Headers{{"transfer-encoding", "pizda"}}
 		sm.Smuggle(&valid.Headers[0], smuggleVariant)
 		sm.Smuggle(&invalid.Headers[0], smuggleVariant)
 
