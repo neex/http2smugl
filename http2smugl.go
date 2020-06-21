@@ -24,7 +24,6 @@ func main() {
 		noAutoHeaders     bool
 		bodyToSend        []byte
 		bodyLines         int
-		noTLS             bool
 		// detect subcommand options
 		silent      bool
 		threads     int
@@ -73,7 +72,6 @@ func main() {
 				ConnectAddr:   connectAddr,
 				Headers:       headers,
 				NoAutoHeaders: noAutoHeaders,
-				NoTLS:         noTLS,
 				Body:          bodyToSend,
 				Timeout:       timeout,
 			}, bodyLines)
@@ -110,7 +108,6 @@ func main() {
 	requestCmd.Flags().StringVar(&bodyStr, "body-str", "", "send this string to body (escape seqs like \\r \\n are supported)")
 	requestCmd.Flags().StringVar(&bodyFile, "body-file", "", "read request body from this file")
 	requestCmd.Flags().BoolVar(&noAutoHeaders, "no-auto-headers", false, "don't send pseudo-headers automatically")
-	requestCmd.Flags().BoolVar(&noTLS, "no-tls", false, "don't establish TLS connection")
 	requestCmd.Flags().IntVar(&bodyLines, "body-lines", 10, "how many body lines to print (-1 means no limit)")
 
 	detectCmd.Flags().BoolVar(&silent, "silent", false, "be more silent")

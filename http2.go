@@ -15,7 +15,7 @@ import (
 type RequestParams struct {
 	Target, Method, ConnectAddr string
 	Headers                     Headers
-	NoAutoHeaders, NoTLS        bool
+	NoAutoHeaders               bool
 	Body                        []byte
 	Timeout                     time.Duration
 }
@@ -26,12 +26,19 @@ func DoRequest(params *RequestParams) (Headers, []byte, error) {
 		return nil, nil, err
 	}
 
-	expectedScheme := "https"
-	if params.NoTLS {
-		expectedScheme = "http"
-	}
-	if parsed.Scheme != expectedScheme {
-		return nil, nil, fmt.Errorf("scheme is %#v, but %#v is required", parsed.Scheme, expectedScheme)
+	var (
+		noTLS  bool
+		scheme string
+	)
+
+	switch parsed.Scheme {
+	case "http+h2c", "h2c":
+		noTLS = true
+		scheme = "http"
+	case "https", "h2":
+		scheme = "https"
+	default:
+		return nil, nil, fmt.Errorf(`scheme is %#v, must be "https" or "http+h2c"`, parsed.Scheme)
 	}
 
 	var headers Headers
@@ -43,7 +50,7 @@ func DoRequest(params *RequestParams) (Headers, []byte, error) {
 			{":authority", parsed.Host},
 			{":method", params.Method},
 			{":path", parsed.Path},
-			{":scheme", parsed.Scheme},
+			{":scheme", scheme},
 			{"user-agent", "Mozilla/5.0"},
 		}
 
@@ -70,7 +77,7 @@ func DoRequest(params *RequestParams) (Headers, []byte, error) {
 		targetAddr = parsed.Host
 	}
 
-	return sendPreparedRequest(targetAddr, parsed.Host, params.NoTLS, prepareRequest(headers, params.Body), params.Timeout)
+	return sendPreparedRequest(targetAddr, parsed.Host, noTLS, prepareRequest(headers, params.Body), params.Timeout)
 }
 
 func prepareRequest(headers Headers, body []byte) []byte {

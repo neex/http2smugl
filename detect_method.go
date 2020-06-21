@@ -19,7 +19,7 @@ var DetectMethods = []DetectMethod{
 	DetectContentLengthParsing, DetectChunkedBodyValidation, DetectChunkedBodyConsumption,
 }
 
-func (d DetectMethod) GetHeaders(sm SmugglingMethod, smuggleVariant interface{}) (valid, invalid DetectRequestParams) {
+func (d DetectMethod) GetRequests(sm SmugglingMethod, smuggleVariant interface{}) (valid, invalid DetectRequestParams) {
 	switch d {
 	case DetectContentLengthParsing:
 		if sm == HeaderSmugglingNone {

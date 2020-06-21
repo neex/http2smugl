@@ -73,7 +73,7 @@ func getDetectJobs(target string) (params []DetectParams) {
 						params = append(params, DetectParams{
 							Target:           target,
 							DetectMethod:     dm,
-							SmuggleMethod:    sm,
+							SmugglingMethod:  sm,
 							SmugglingVariant: v,
 							PaddingMethod:    pm,
 							RequestMethod:    rm,

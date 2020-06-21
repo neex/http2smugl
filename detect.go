@@ -10,7 +10,7 @@ import (
 type DetectParams struct {
 	Target           string
 	DetectMethod     DetectMethod
-	SmuggleMethod    SmugglingMethod
+	SmugglingMethod  SmugglingMethod
 	SmugglingVariant interface{}
 	PaddingMethod    PaddingMethod
 	RequestMethod    string
@@ -22,7 +22,7 @@ func (p *DetectParams) String() string {
 
 func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbose bool) (bool, error) {
 	prefixHeaders := params.PaddingMethod.Headers()
-	valid, invalid := params.DetectMethod.GetHeaders(params.SmuggleMethod, params.SmugglingVariant)
+	valid, invalid := params.DetectMethod.GetRequests(params.SmugglingMethod, params.SmugglingVariant)
 	valid.Headers = prefixHeaders.Combine(valid.Headers)
 	invalid.Headers = prefixHeaders.Combine(invalid.Headers)
 
