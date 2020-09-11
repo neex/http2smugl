@@ -37,22 +37,17 @@ func (s SmugglingMethod) Smuggle(h *Header, variant interface{}) {
 		h.Name += space
 
 	case HeaderSmugglingNewlineValue:
-		v := variant.([2]string)
-		newline := v[0]
-		headerName := v[1]
-		h.Value = fmt.Sprintf("val%s%s: %s%sfake: ", newline, h.Name, h.Value, newline)
-		h.Name = headerName
+		v := variant.(newlineHeaderParams)
+		h.Value = fmt.Sprintf("val%s%s:%s", v.Newline, h.Name, h.Value)
+		h.Name = v.Header
 
 	case HeaderSmugglingNewlineName:
-		newline := variant.(string)
-		h.Name = fmt.Sprintf("fake: val%s%s: %s%sheader: ", newline, h.Name, h.Value, newline)
-		h.Value = "val"
+		v := variant.(newlineHeaderParams)
+		h.Name = fmt.Sprintf("%s%s%s", v.Header, v.Newline, h.Name)
 
 	case HeaderSmugglingNewlinePath:
-		v := variant.([2]string)
-		newline := v[0]
-		origPath := v[1]
-		h.Value = fmt.Sprintf("%s HTTP/1.1%s%s: %s%sfake: ", origPath, newline, h.Name, h.Value, newline)
+		v := variant.(newlinePathParams)
+		h.Value = fmt.Sprintf("%s HTTP/1.1%s%s: %s%sfake: ", v.Path, v.Newline, h.Name, h.Value, v.Newline)
 		h.Name = ":path"
 
 	default:
@@ -71,25 +66,35 @@ func (s SmugglingMethod) GetVariants(path string) (variants []interface{}) {
 
 	case HeaderSmugglingNewlineName:
 		for _, nl := range newlines {
-			variants = append(variants, nl)
+			for _, h := range []string{"x", "x:"} {
+				variants = append(variants, newlineHeaderParams{nl, h})
+			}
 		}
 		return
 
 	case HeaderSmugglingNewlineValue:
 		for _, nl := range newlines {
 			for _, h := range []string{"header", " header", "x-forwarded-for"} {
-				variants = append(variants, [2]string{nl, h})
+				variants = append(variants, newlineHeaderParams{nl, h})
 			}
 		}
 		return
 
 	case HeaderSmugglingNewlinePath:
 		for _, nl := range newlines {
-			variants = append(variants, [2]string{nl, path})
+			variants = append(variants, newlinePathParams{nl, path})
 		}
 		return
 
 	default:
 		panic(fmt.Errorf("invalid header smuggling: %#v", s))
 	}
+}
+
+type newlineHeaderParams struct {
+	Newline, Header string
+}
+
+type newlinePathParams struct {
+	Newline, Path string
 }

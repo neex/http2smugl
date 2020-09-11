@@ -81,13 +81,9 @@ func DoRequest(params *RequestParams) (Headers, []byte, error) {
 }
 
 func prepareRequest(headers Headers, body []byte) []byte {
-	hpackBuf := bytes.NewBuffer(nil)
-	hpackEnc := hpack.NewEncoder(hpackBuf)
+	var hpackBuf []byte
 	for i := range headers {
-		_ = hpackEnc.WriteField(hpack.HeaderField{
-			Name:  headers[i].Name,
-			Value: headers[i].Value,
-		})
+		hpackBuf = hpackAppendHeader(hpackBuf, &headers[i])
 	}
 
 	requestBuf := bytes.NewBuffer(nil)
@@ -104,7 +100,7 @@ func prepareRequest(headers Headers, body []byte) []byte {
 
 	_ = framer.WriteHeaders(http2.HeadersFrameParam{
 		StreamID:      1,
-		BlockFragment: hpackBuf.Bytes(),
+		BlockFragment: hpackBuf,
 		EndStream:     len(body) == 0,
 		EndHeaders:    true,
 	})
@@ -201,4 +197,26 @@ func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []b
 	}
 
 	return
+}
+
+func hpackAppendHeader(dst []byte, h *Header) []byte {
+	dst = append(dst, 0x10)
+	dst = hpackAppendVarInt(dst, 7, uint64(len(h.Name)))
+	dst = append(dst, h.Name...)
+	dst = hpackAppendVarInt(dst, 7, uint64(len(h.Value)))
+	dst = append(dst, h.Value...)
+	return dst
+}
+
+func hpackAppendVarInt(dst []byte, n byte, val uint64) []byte {
+	k := uint64((1 << n) - 1)
+	if val < k {
+		return append(dst, byte(val))
+	}
+	dst = append(dst, byte(k))
+	val -= k
+	for ; val >= 128; val >>= 7 {
+		dst = append(dst, byte(0x80|(val&0x7f)))
+	}
+	return append(dst, byte(val))
 }

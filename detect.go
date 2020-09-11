@@ -53,10 +53,6 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 				Body:        request.Body,
 				Timeout:     timeout,
 			})
-
-			if err != nil && verbose {
-				log.Printf("request error: %s, valid=%v: %v", params, doValid, err)
-			}
 		}
 
 		if doValid {
