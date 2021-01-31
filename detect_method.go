@@ -7,19 +7,19 @@ type DetectRequestParams struct {
 	Body    []byte
 }
 
-type DetectMethod string
+type DetectMethod int
 
 const (
-	DetectContentLengthParsing   = "detect content length parsing"
-	DetectChunkedBodyConsumption = "detect chunked body consumption"
-	DetectChunkedBodyValidation  = "detect chunked body validation"
+	DetectContentLengthParsing DetectMethod = iota
+	DetectChunkedBodyValidation
+	DetectChunkedBodyConsumption
 )
 
 var DetectMethods = []DetectMethod{
 	DetectContentLengthParsing, DetectChunkedBodyValidation, DetectChunkedBodyConsumption,
 }
 
-func (d DetectMethod) GetRequests(sm SmugglingMethod, smuggleVariant interface{}) (valid, invalid DetectRequestParams) {
+func (d DetectMethod) GetRequests(sm SmugglingMethod, smuggleVariant SmugglingVariant) (valid, invalid DetectRequestParams) {
 	switch d {
 	case DetectContentLengthParsing:
 		if sm == HeaderSmugglingNone {
@@ -59,8 +59,23 @@ func (d DetectMethod) GetRequests(sm SmugglingMethod, smuggleVariant interface{}
 }
 
 func (d DetectMethod) AllowsSmugglingMethod(sm SmugglingMethod) bool {
-	if sm != HeaderSmugglingNone {
+	switch d {
+	case DetectContentLengthParsing:
+		return sm != HeaderSmugglingNone && sm != HeaderSmugglingUnicodeCharacters
+	default:
 		return true
 	}
-	return d == DetectChunkedBodyConsumption || d == DetectChunkedBodyValidation
+}
+
+func (d DetectMethod) String() string {
+	switch d {
+	case DetectContentLengthParsing:
+		return "detect content length parsing"
+	case DetectChunkedBodyConsumption:
+		return "detect chunked body consumption"
+	case DetectChunkedBodyValidation:
+		return "detect chunked body validation"
+	default:
+		return "unknown detect method"
+	}
 }

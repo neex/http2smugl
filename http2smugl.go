@@ -22,12 +22,14 @@ func main() {
 		bodyFile, bodyStr string
 		requestMethod     string
 		noAutoHeaders     bool
+		autoContentLength bool
 		bodyToSend        []byte
 		bodyLines         int
 		// detect subcommand options
-		silent      bool
+		verbose     bool
 		threads     int
 		targetsFile string
+		csvLog      string
 	)
 
 	requestCmd := &cobra.Command{
@@ -67,13 +69,14 @@ func main() {
 			}
 
 			doAndPrintRequest(&RequestParams{
-				Target:        target,
-				Method:        unquoteArg(requestMethod),
-				ConnectAddr:   connectAddr,
-				Headers:       headers,
-				NoAutoHeaders: noAutoHeaders,
-				Body:          bodyToSend,
-				Timeout:       timeout,
+				Target:           target,
+				Method:           unquoteArg(requestMethod),
+				ConnectAddr:      connectAddr,
+				Headers:          headers,
+				NoAutoHeaders:    noAutoHeaders,
+				AddContentLength: autoContentLength,
+				Body:             bodyToSend,
+				Timeout:          timeout,
 			}, bodyLines)
 			return nil
 		},
@@ -96,7 +99,31 @@ func main() {
 					}
 				}
 			}
-			return detectMultipleTargets(targets, connectAddr, threads, timeout, !silent)
+
+			var csvWriter *CSVLogWriter
+			if csvLog != "" {
+				var err error
+				csvWriter, err = NewCSVLogWriter(csvLog)
+				if err != nil {
+					return err
+				}
+				defer func() {
+					_ = csvWriter.Close()
+				}()
+			}
+
+			for i := range targets {
+				if !strings.Contains(targets[i], "/") {
+					targets[i] = fmt.Sprintf("https://%s/", targets[i])
+				}
+			}
+
+			return detectMultipleTargets(targets,
+				connectAddr,
+				threads,
+				timeout,
+				csvWriter,
+				verbose)
 		},
 	}
 
@@ -108,11 +135,13 @@ func main() {
 	requestCmd.Flags().StringVar(&bodyStr, "body-str", "", "send this string to body (escape seqs like \\r \\n are supported)")
 	requestCmd.Flags().StringVar(&bodyFile, "body-file", "", "read request body from this file")
 	requestCmd.Flags().BoolVar(&noAutoHeaders, "no-auto-headers", false, "don't send pseudo-headers automatically")
+	requestCmd.Flags().BoolVar(&autoContentLength, "auto-content-length", false, "add \"content-length\" header with body size")
 	requestCmd.Flags().IntVar(&bodyLines, "body-lines", 10, "how many body lines to print (-1 means no limit)")
 
-	detectCmd.Flags().BoolVar(&silent, "silent", false, "be more silent")
+	detectCmd.Flags().BoolVar(&verbose, "verbose", false, "be more verbose")
 	detectCmd.Flags().IntVar(&threads, "threads", 100, "number of threads")
 	detectCmd.Flags().StringVar(&targetsFile, "targets", "", "read targets list from this file")
+	detectCmd.Flags().StringVar(&csvLog, "csv-log", "", "log results into csv file")
 
 	rootCmd.AddCommand(requestCmd, detectCmd)
 

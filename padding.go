@@ -4,12 +4,12 @@ import (
 	"fmt"
 )
 
-type PaddingMethod string
+type PaddingMethod int
 
 const (
-	PaddingHeadersNone        PaddingMethod = "no padding headers"
-	PaddingHeadersUnicodeSame               = "pad with same unicode header"
-	PaddingHeadersASCIISame                 = "pad with same ASCII header"
+	PaddingHeadersNone PaddingMethod = iota
+	PaddingHeadersUnicodeSame
+	PaddingHeadersASCIISame
 )
 
 var (
@@ -43,4 +43,17 @@ func (p PaddingMethod) Headers() (headers Headers) {
 	}
 
 	return
+}
+
+func (p PaddingMethod) String() string {
+	switch p {
+	case PaddingHeadersNone:
+		return "no padding headers"
+	case PaddingHeadersUnicodeSame:
+		return "pad with same unicode header"
+	case PaddingHeadersASCIISame:
+		return "pad with same ASCII header"
+	default:
+		return "unknown padding method"
+	}
 }

@@ -8,19 +8,47 @@ import (
 )
 
 type DetectParams struct {
-	Target           string
+	Target        string
+	RequestMethod string
+
 	DetectMethod     DetectMethod
 	SmugglingMethod  SmugglingMethod
-	SmugglingVariant interface{}
+	SmugglingVariant SmugglingVariant
 	PaddingMethod    PaddingMethod
-	RequestMethod    string
 }
 
 func (p *DetectParams) String() string {
-	return fmt.Sprintf("%#v", p) // TODO
+	return fmt.Sprintf(
+		"target=%s, http_method=%s, detect_method=%s, "+
+			"smuggling_method=%s, smuggling_variant=%s, padding_method=%s",
+		p.Target,
+		p.RequestMethod,
+		p.DetectMethod,
+		p.SmugglingMethod,
+		p.SmugglingVariant,
+		p.PaddingMethod,
+	)
 }
 
-func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbose bool) (bool, error) {
+type DetectResult bool
+
+const (
+	Indistinguishable DetectResult = false
+	Distinguishable   DetectResult = true
+)
+
+func (r DetectResult) String() string {
+	switch r {
+	case Distinguishable:
+		return "distinguishable"
+	case Indistinguishable:
+		return "indistinguishable"
+	default:
+		return fmt.Sprintf("unknown result value: %#v", r)
+	}
+}
+
+func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbose bool) (DetectResult, error) {
 	prefixHeaders := params.PaddingMethod.Headers()
 	valid, invalid := params.DetectMethod.GetRequests(params.SmugglingMethod, params.SmugglingVariant)
 	valid.Headers = prefixHeaders.Combine(valid.Headers)
@@ -55,6 +83,13 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 			})
 		}
 
+		if err != nil {
+			_, ok := err.(RSTError)
+			if !ok {
+				log.Printf("request: %v, error: %v", params, err)
+			}
+		}
+
 		if doValid {
 			validResponses.AccountRequest(headers, body)
 		} else {
@@ -62,10 +97,15 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 		}
 	}
 
-	distinguishable := validResponses.DistinguishableFrom(invalidResponses)
-	if verbose {
-		log.Printf("%s: valid=%s, invalid=%s, distinguishable=%v",
-			params, validResponses, invalidResponses, distinguishable)
+	var result DetectResult
+	if validResponses.DistinguishableFrom(invalidResponses) {
+		result = Distinguishable
+	} else {
+		result = Indistinguishable
 	}
-	return distinguishable, nil
+	if verbose {
+		log.Printf("%s: valid=%s, invalid=%s, result=%v",
+			params, validResponses, invalidResponses, result)
+	}
+	return result, nil
 }

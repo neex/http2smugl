@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/http2"
@@ -18,6 +19,15 @@ type RequestParams struct {
 	NoAutoHeaders               bool
 	Body                        []byte
 	Timeout                     time.Duration
+	AddContentLength            bool
+}
+
+type RSTError struct {
+	Code http2.ErrCode
+}
+
+func (r RSTError) Error() string {
+	return fmt.Sprintf("received RST frame, code=%v", r.Code)
 }
 
 func DoRequest(params *RequestParams) (Headers, []byte, error) {
@@ -70,6 +80,10 @@ func DoRequest(params *RequestParams) (Headers, []byte, error) {
 			}
 			headers = append(headers, h)
 		}
+	}
+
+	if params.AddContentLength {
+		headers = append(headers, Header{"content-length", strconv.Itoa(len(params.Body))})
 	}
 
 	targetAddr := params.ConnectAddr
@@ -125,6 +139,16 @@ func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []b
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
 		address = net.JoinHostPort(address, "443")
 	}
+
+	name, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid address %v: %w", address, err)
+	}
+	ip, err := DefaultDNSCache.Lookup(name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("lookup for %v failed: %w", name, err)
+	}
+	address = net.JoinHostPort(ip.String(), port)
 
 	tcpConn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
@@ -190,7 +214,7 @@ func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []b
 			bodyRead = f.StreamEnded()
 
 		case *http2.RSTStreamFrame:
-			err = fmt.Errorf("received RST frame: ErrCode=%v", f.ErrCode)
+			err = RSTError{Code: f.ErrCode}
 			return
 		}
 
