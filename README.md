@@ -129,4 +129,4 @@ TODO
 
 ## Contacts
 
-If you have any ideas on this topic, contact me via @emil_lerner on Twitter or @neexemil on Telegram - or just post an issue here on GitHub.
+If you have any ideas on this topic, contact me via [@emil_lerner](https://twitter.com/emil_lerner) on Twitter or [@neexemil](https://t.me/neexemil) on Telegram - or just post an issue here on GitHub.
