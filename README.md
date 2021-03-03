@@ -6,9 +6,13 @@ The scheme is as follows:
 1. An attacker sends a crafted HTTP/2 request to the target server, which we call _frontend_.
 2. The request is (presumably) converted to HTTP/1.1 and transmitted to another, _backend_ server.
 
-The attacker wants to find such a request that it will be seen as two separate requests by the backend server. We assume that the frontend<->backend HTTP/1.1 connection uses keep-alive, and the frontend will send requests from other users to the same connection.
+The attacker wants to find such a request that it will be seen as two separate requests by the backend server.
 
-For the information on theory and practice on the HTTP Request Smuggling, please refer to [Portswigger Web Security Academy](https://portswigger.net/web-security/request-smuggling).
+If the frontend<->backend HTTP/1.1 connection uses keep-alive, the frontend might send requests from other users to the same connection. If we're able to "poison" the connection by a partial request that comes after a legit one, we can retrieve the request from another user.
+
+Other possible scenarios include bypass of frontend server protection and rewrites, cache poisoning and / or cache deception.
+
+For more information on the HTTP Request Smuggling, please refer to [Portswigger Web Security Academy](https://portswigger.net/web-security/request-smuggling).
 
 ## Why focus on HTTP/2?
 
