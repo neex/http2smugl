@@ -50,9 +50,9 @@ The command will report only if it could detect that the server parses a smuggle
 
 ## How detection works
 
-To perform an HTTP Request Smuggling attack, we actually need to "smuggle" a single header first (either `Content-Length` or `Transfer-Encoding`). It means that we need to send a header that a) controls when the request finished b) won't be processed by the frontend, but will be processed by the backend.
+To perform an HTTP Request Smuggling attack, we actually need to "smuggle" a single header first (either `Content-Length` or `Transfer-Encoding`). It means that we need to send a header that a) controls where the request body finishes and b) is not processed by the frontend, but is processed by the backend.
 
-That is usually achieved by modifying a header in some way: adding spaces or tabs at the end, replacing the value with a semi-equivalent etc.
+That is usually achieved by modifying a header in some way: adding spaces or tabs at the end of its name, replacing the value with a semi-equivalent etc.
 
 The basic idea of the vulnerability detection algorithm is to detect if the server actually processes a smuggled header as if it were `Content-Length` or `Transfer-Encoding`. We do this by sending multiple requests: some with valid, and others with invalid values for the header. Then try to detect if there's a way to *distinguish* the responses from these two groups.
 
@@ -95,7 +95,7 @@ The tool tries a variety of character as spaces: it includes ` `, `\t`, `\v`, `\
 
 #### Underscore
 
-To smuggle a header, we replace the dash (`-`) with an underscore (`_`). If the backend is CGI-inspired in some way, it might convert headers like `Header-Name` to the `HEADER_NAME` form, thus the dash will become underscore anyway. While determining how to parse the body, such a backend supposedly requests the value of `CONTENT_LENGTH` / `TRANSFER_ENCODING` from its' headers dictionary, and it will be there.
+To smuggle a header, we replace the dash (`-`) with an underscore (`_`). If the backend is CGI-inspired in some way, it might convert headers like `Header-Name` to the `HEADER_NAME` form, thus the dash will become underscore anyway. While determining how to parse the body, such a backend supposedly requests the value of `CONTENT_LENGTH` / `TRANSFER_ENCODING` from its headers dictionary, and it will be there.
 
 #### Newlines
 
@@ -103,7 +103,7 @@ This one is HTTP/2 specific. As HTTP/2 is a binary protocol, we can try to send 
 
 During the HTTP/2 -> HTTP/1.1 conversion, the header splits into two different headers, thus the request will look completely different for the backend.
 
-To smuggle a header, we prepend a fake header and a newline before it: pair of name "Transfer-Encoding" and value "chunked" becomes name "fake" and value "fake\r\ntransfer-encoding: chunked".
+To smuggle a header, we put its name and value after a newline: a header with the name "Transfer-Encoding" and the value of "chunked" becomes one with the name "fake" with the value of "fake\r\ntransfer-encoding: chunked".
 
 #### UTF characters
 
@@ -115,11 +115,11 @@ Of course, it is required that the frontend will pass UTF-8 header names/values 
 
 ### Known false-positives
 
-#### Apache Traffic Server
+#### ELB
 
 TODO
 
-#### ELB
+#### Apache Traffic Server
 
 TODO
 
