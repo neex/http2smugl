@@ -127,7 +127,9 @@ func main() {
 		},
 	}
 
-	var rootCmd = &cobra.Command{}
+	var rootCmd = &cobra.Command{
+		Use: "http2smugl",
+	}
 
 	rootCmd.PersistentFlags().DurationVar(&timeout, "timeout", 10*time.Second, "timeout to all requests")
 	rootCmd.PersistentFlags().StringVar(&connectAddr, "connect-to", "", "override target ip")

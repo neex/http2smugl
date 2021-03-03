@@ -54,8 +54,9 @@ func detectMultipleTargets(targets []string,
 				} else {
 					verdict = distinguishable.String()
 				}
-
-				fmt.Printf("%s: %v\n", job, verdict)
+				if distinguishable != Indistinguishable {
+					fmt.Printf("%s: %v\n", job, verdict)
+				}
 				if csv != nil {
 					_ = csv.Log(job, distinguishable)
 				}

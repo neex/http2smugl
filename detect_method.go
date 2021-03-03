@@ -25,7 +25,7 @@ func (d DetectMethod) GetRequests(sm SmugglingMethod, smuggleVariant SmugglingVa
 		if sm == HeaderSmugglingNone {
 			panic(fmt.Errorf("cannot use %#v with %#v", smuggleVariant, d))
 		}
-		valid.Headers = Headers{{"content-length", "0"}}
+		valid.Headers = Headers{{"content-length", "1"}}
 		invalid.Headers = Headers{{"content-length", "-1"}}
 		sm.Smuggle(&valid.Headers[0], smuggleVariant)
 		sm.Smuggle(&invalid.Headers[0], smuggleVariant)
