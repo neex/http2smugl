@@ -28,7 +28,7 @@ Surprisingly, yes!
 
 I've found a possibility to smuggle a header with a space character through Cloudflare, thus opening a door for Cloudflare<->client smuggling (in case the software of a Cloudflare client accepts & trims header names). Here's [the blog post](https://lab.wallarm.com/cloudflare-fixed-an-http-2-smuggling-vulnerability/).
 
-There is also another bug bounty report that is not public yet.
+There is also another bug bounty report that is not public yet. It makes use of the fact that custom software doesn't filter out newlines in HTTP2 headers, and the smuggling 100% happens (I can see other users' requests).
 
 However, I understand that this type of vulnerabilities must be frustratingly rare: unlike HTTP/1.1, there are not so many HTTP/2 implementations, and most of them are made with security in mind, thus rejecting suspicious or invalid headers.
 

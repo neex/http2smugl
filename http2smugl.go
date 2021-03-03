@@ -50,9 +50,9 @@ func main() {
 					return err
 				}
 				bodyToSend = data
-				return nil
+			} else {
+				bodyToSend = []byte(unquoteArg(bodyStr))
 			}
-			bodyToSend = []byte(unquoteArg(bodyStr))
 
 			target := args[0]
 			var headers []Header
