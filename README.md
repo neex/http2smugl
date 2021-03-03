@@ -1,6 +1,6 @@
 # http2smugl
 
-This is a tool that helps to detect and exploit HTTP request smuggling in cases it can be achieved via HTTP/2 -> HTTP/1.1 conversion by the frontend server.
+This tool helps to detect and exploit HTTP request smuggling in cases it can be achieved via HTTP/2 -> HTTP/1.1 conversion by the frontend server.
 
 The scheme is as follows:
 1. An attacker sends a crafted HTTP/2 request to the target server, which we call _frontend_.
@@ -10,7 +10,7 @@ The attacker wants to find such a request that it will be seen as two separate r
 
 If the frontend<->backend HTTP/1.1 connection uses keep-alive, the frontend might send requests from other users to the same connection. If we're able to "poison" the connection by a partial request that comes after a legit one, we can retrieve the request from another user.
 
-Other possible scenarios include bypass of frontend server protection and rewrites, cache poisoning and / or cache deception.
+Other possible scenarios include bypassing frontend server protection and rewrites, cache poisoning or cache deception.
 
 For more information on the HTTP Request Smuggling, please refer to [Portswigger Web Security Academy](https://portswigger.net/web-security/request-smuggling).
 
@@ -26,7 +26,7 @@ In general, we hope that there are implementations of HTTP/2 that are not very a
 
 Surprisingly, yes!
 
-I've found a possibility to send smuggle a header with a space character through Cloudflare, thus opening a door for Cloudflare<->client smuggling (in case the software of a Cloudflare client accepts & trims header names). Here's [the blogpost](https://lab.wallarm.com/cloudflare-fixed-an-http-2-smuggling-vulnerability/).
+I've found a possibility to smuggle a header with a space character through Cloudflare, thus opening a door for Cloudflare<->client smuggling (in case the software of a Cloudflare client accepts & trims header names). Here's [the blog post](https://lab.wallarm.com/cloudflare-fixed-an-http-2-smuggling-vulnerability/).
 
 There is also another bug bounty report that is not public yet.
 
@@ -36,11 +36,11 @@ However, I understand that this type of vulnerabilities must be frustratingly ra
 
 The tool has a subcommand that tries to detect if a target vulnerable to the HTTP Request Smuggling attack automatically. The algorithm behind this feature is described in this section.
 
-To perform an HTTP Request Smuggling attack, we actually need to "smuggle" a single header first (either `Content-Length` or `Transfer-Encoding`). It means that we need to send a header that a) controls where the request body finishes and b) is not processed by the frontend, but is processed by the backend.
+To perform an HTTP Request Smuggling attack, we actually need to "smuggle" a single header first (either `Content-Length` or `Transfer-Encoding`). It means that we need to send a header that a) controls where the request body finishes and b) is not processed by the frontend but is processed by the backend.
 
 That is usually achieved by modifying a header in some way: adding spaces or tabs at the end of its name, replacing the value with a semi-equivalent etc.
 
-The basic idea of the vulnerability detection algorithm is to detect if the server actually processes a smuggled header as if it were `Content-Length` or `Transfer-Encoding`. We do this by sending multiple requests: some with valid, and others with invalid values for the header. Then try to detect if there's a way to *distinguish* the responses from these two groups.
+The vulnerability detection algorithm's basic idea is to detect if the server actually processes a smuggled header as if it were `Content-Length` or `Transfer-Encoding`. We do this by sending multiple requests: some with valid and others with invalid values for the header. Then try to detect if there's a way to *distinguish* the responses from these two groups.
 
 That is why tool output does not contain the words "vulnerable/invulnerable": it just says if it can distinguish responses that came on the requests from these two groups.
 
@@ -53,7 +53,7 @@ The first case is not interesting as we could send the non-smuggled version of t
 The concrete variation of detection techniques:
 1. We send a smuggled version of `Transfer-Encoding: chunked` (e.g. `transfer_encoding:chunked`) and different bodies: valid is `0\r\n\r\n` and invalid is `999\r\n`.
 
-   In case the responses are different, we can be sure that the backend server receives and processes the smuggled header. There's no reason for the frontend to do this: HTTP/2 doesn't use the chunked format we sent, so it would be invalid.
+   In case the responses are different, we can be sure that the backend server receives and processes the smuggled header. There's no reason for the frontend to do this: HTTP/2 doesn't use the chunked format we sent, so that it would be invalid.
 
    We expect the backend to hang (that is, request to timeout) for the invalid requests as it waits for more data to arrive.
 
@@ -65,11 +65,11 @@ The concrete variation of detection techniques:
 
 3. We send a smuggled version of the `Content-Length` header with values `1` and `-1`.
 
-   Both values are invalid from the frontend's point of view: there's another mechanism of determining the body length in HTTP/2 and no request body is actually sent in both cases. If the responses are different, we suppose that it's the backend server who parsed the headers.
+   Both values are invalid from the frontend's point of view: there's another mechanism of determining the body length in HTTP/2, and no request body is actually sent in both cases. If the responses are different, we suppose that it's the backend server who parsed the headers.
 
-   This method is the least reliable: the frontend might issue different errors for the cases when Content-Length has an invalid value and when it does not match the actual length.
+   This method is the least reliable: the frontend might issue different errors when Content-Length has an invalid value, and when it does not match the actual length.
 
-By sending multiple pairs of valid/invalid requests we can reduce the chance of random false positive. On the other side, we can stop early if we see that there is no way we could separate responses on "valid" requests from the responses on "invalid" ones.
+By sending multiple pairs of valid/invalid requests, we can reduce the chance of random false positive. On the other side, we can stop early if we see that there is no way we could separate responses on "valid" requests from the responses on "invalid" ones.
 
 ### Smuggling techniques
 
@@ -77,27 +77,27 @@ The tool tries to employ multiple smuggling techniques by modifying a header in 
 
 #### Spaces
 
-To smuggle a header, we append a space to it. It is the most common and classic method. We hope that the header is not processed by the frontend, but is sent as-is to the backend, which strips the space.
+To smuggle a header, we append a space to it. It is the most common and classic method. We hope that the header is not processed by the frontend but is sent as-is to the backend, which strips the space.
 
 The tool tries a variety of character as spaces: it includes ` `, `\t`, `\v`, `\x00` and the Unicode ones.
 
 #### Underscore
 
-To smuggle a header, we replace the dash (`-`) with an underscore (`_`). If the backend is CGI-inspired in some way, it might convert headers like `Header-Name` to the `HEADER_NAME` form, thus the dash will become underscore anyway. While determining how to parse the body, such a backend supposedly requests the value of `CONTENT_LENGTH` / `TRANSFER_ENCODING` from its headers dictionary, and it will be there.
+To smuggle a header, we replace the dash (`-`) with an underscore (`_`). If the backend is CGI-inspired in some way, it might convert headers like `Header-Name` to the `HEADER_NAME` form; thus, the dash will become underscore anyway. While determining how to parse the body, such a backend supposedly requests the value of `CONTENT_LENGTH` / `TRANSFER_ENCODING` from its headers dictionary, and it will be there.
 
 #### Newlines
 
-This one is HTTP/2 specific. As HTTP/2 is a binary protocol, we can try to send newlines in the header name or value. It is prohibited by the standard, but we hope to find an implementation that still accepts this.
+This one is HTTP/2 specific. As HTTP/2 is a binary protocol, we can try to send newlines in the header name or value. The standard prohibits it, but we hope to find an implementation that still accepts this.
 
-During the HTTP/2 -> HTTP/1.1 conversion, the header splits into two different headers, thus the request will look completely different for the backend.
+During the HTTP/2 -> HTTP/1.1 conversion, the header splits into two different headers, meaning the request will look different for the backend.
 
 To smuggle a header, we put its name and value after a newline: a header with the name "Transfer-Encoding" and the value of "chunked" becomes one with the name "fake" with the value of "fake\r\ntransfer-encoding: chunked".
 
 #### UTF characters
 
-If the backend uses some high-level language and does not perform enough validation of headers, it might convert the names to the uppercase before doing anything else and do it using Unicode-aware functions. Luckily, `TRANSFER-ENCODING` contains the letter `S`, which equals to `ſ` (`\u017f`) uppercased.
+Suppose the backend uses some high-level language and does not perform enough headers' validation. In that case, it might convert the names to the uppercase before doing anything else and do it using Unicode-aware functions. Luckily, `TRANSFER-ENCODING` contains the letter `S`, which is `ſ` (`\u017f`) uppercased.
 
-In the same manner, we can search for a backend that will convert the value of `Transfer-Encoding` to lowercase: we send `chunKed` instead of `chunked` with `\u212a` instead of `K`.
+Similarly, we can search for a backend that will convert the value of `Transfer-Encoding` to lowercase: we send `chunKed` instead of `chunked` with `\u212a` instead of `K`.
 
 Of course, it is required that the frontend will pass UTF-8 header names/values to the backend.
 
@@ -117,15 +117,15 @@ Use this subcommand to send a (probably a bit malformed) http2 request. The firs
 
 This subcommand tries to detect the HTTP request smuggling using various techniques. To use it, just run `http2smugl detect [HTTPS URL]`.
 
-The command will report only if it could detect that the server parses a smuggled header. To understand what does it mean, please read the corresponding section.
+The command will output something only if it could detect that the server parses a smuggled header. To understand what does it mean, please read the corresponding section.
 
 ### Known false-positives
 
-In this section I describe some cases when the tool says the responses are "distinguishable", but no vulnerability could exist.
+In this section, I describe some cases when the tool says the responses are "distinguishable", but no vulnerability could exist.
 
 #### ELB
 
-Amazon's Elastic Load Balancer implements multiple mitigations from HTTP Request Smuggling. While not all of them reject the request by default, ELB won't reuse a connection after sending a request with "suspicious" headers, thus an actual attack is not possible.
+Amazon's Elastic Load Balancer implements multiple mitigations from HTTP Request Smuggling. While not all of them reject the request by default, ELB won't reuse a connection after sending a request with "suspicious" headers. Thus an actual attack is not possible.
 
 To detect you're dealing with ELB, you can use the `Server` response header. If it's filtered out, you can send a request with `content__length` header (note two underscores) and value -1: if it's 400, it's probably ELB or other WAF (see below).
 
@@ -137,10 +137,10 @@ The easiest way to detect you're dealing with ATS (besides the `Server` header) 
 
 #### Other WAFs
 
-WAFs try to detect suspicious headers - it's their job. Sometimes it results in the tools saying "distinguishable": WAF could block e.g. `content_length:-1` and allow `content_length:1` just because its filters happen to come out with these decisions.
+WAFs try to detect suspicious headers - it's their job. Sometimes it results in the tools saying "distinguishable": WAF could block something like `content_length:-1` and allow `content_length:1` just because its filters happen to come out with these decisions.
 
 If you see a WAF in the `Server` header, it's probably a false positive.
 
 ## Contacts
 
-If you have any ideas on this topic, contact me via [@emil_lerner](https://twitter.com/emil_lerner) on Twitter or [@neexemil](https://t.me/neexemil) on Telegram - or just post an issue here on GitHub.
+If you have any ideas on this topic, contact me via [@emil_lerner](https://twitter.com/emil_lerner) on Twitter or [@neexemil](https://t.me/neexemil) on Telegram - or post an issue here on GitHub.
