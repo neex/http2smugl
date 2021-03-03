@@ -1,5 +1,3 @@
-### This document is WIP
-
 # http2smugl
 
 This is a tool that helps to detect and exploit HTTP request smuggling in cases it can be achieved via HTTP/2 -> HTTP/1.1 conversion by the frontend server.
@@ -115,17 +113,25 @@ Of course, it is required that the frontend will pass UTF-8 header names/values 
 
 ### Known false-positives
 
+In this section I describe some cases when the tool says the responses are "distinguishable", but no vulnerability could exist.
+
 #### ELB
 
-TODO
+Amazon's Elastic Load Balancer implements multiple mitigations from HTTP Request Smuggling. While not all of them reject the request by default, ELB won't reuse a connection after sending a request with "suspicious" headers, thus an actual attack is not possible.
+
+To detect you're dealing with ELB, you can use the `Server` response header. If it's filtered out, you can send a request with `content__length` header (note two underscores) and value -1: if it's 400, it's probably ELB or other WAF (see below).
 
 #### Apache Traffic Server
 
-TODO
+Apache Traffic Server is mainly used at Yahoo. It processes HTTP/2 in an unusual way: it converts it to HTTP/1.1 in memory and then re-parses the resulting request. Thus, while a header technically could be "smuggled", there's no way it will result in a vulnerability: you could send the same bytes to an HTTP/1.1 connection.
+
+The easiest way to detect you're dealing with ATS (besides the `Server` header) is by sending a `TRACE` request. If a `Max-Forwards: 0` header present in the request, ATS will return an answer to `TRACE` requests by default without forwarding it to the backend.
 
 #### Other WAFs
 
-TODO
+WAFs try to detect suspicious headers - it's their job. Sometimes it results in the tools saying "distinguishable": WAF could block e.g. "content_length:-1" and allow "content_length:1" just because its filters says so.
+
+If you see a WAF in the `Server` header, it's probably a false positive.
 
 ## Contacts
 
