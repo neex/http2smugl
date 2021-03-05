@@ -16,7 +16,7 @@ For more information on the HTTP Request Smuggling, please refer to [Portswigger
 
 ## Why focus on HTTP/2?
 
-In HTTP/2, all HTTP headers and values are binary. That means that technically they can contain additional spaces or even newlines. Despite it is explicitly prohibited by the standard, we hope to find implementations that allow such invalid headers. These headers will corrupt converted HTTP/1.1 request to the backend.
+In HTTP/2, all HTTP headers' names and values are binary. That means that technically they can contain additional spaces or even newlines. Despite these things being rejected by most implementations, we hope to find ones that allow such headers. They will corrupt the converted HTTP/1.1 request to the backend.
 
 Another point is that some recent fixes related to HTTP Request Smuggling might be implemented only for HTTP/1.1 parsers.
 
@@ -44,13 +44,19 @@ The vulnerability detection algorithm's basic idea is to detect if the server ac
 
 That is why tool output does not contain the words "vulnerable/invulnerable": it just says if it can distinguish responses that came on the requests from these two groups.
 
-For example, consider we're trying to smuggle the `transfer-encoding` header by replacing the dash with an underscore.
+The tool considers two sets of HTTP responses to be distinguishable if at least one of the following two conditions is met:
+1. The sets of their response codes do not intersect
+2. The sets of lengths of the replies are separable from each other (e.g. all "valid" responses are longer than 1000 bytes and all "invalid" ones are shorter).
+
+The timeouts are treated as a unique status code value not equal to any other; thus, the tool supersedes the classical "detect by timing" scheme.
+
+Let us consider an example. Suppose we're trying to smuggle the `transfer-encoding` header by replacing the dash with an underscore.
 
 If it appears that the server responds with status 400 every time we send `transfer_encoding:zalupa` and hangs when it's `transfer_encoding:chunked`, we can say that the server probably does process the header as the value for transfer encoding. Theoretically, it could be either the frontend or the backend server.
 
 The first case is not interesting as we could send the non-smuggled version of the header anyway, and the second one is what we're looking for. As everything happens over HTTP/2, the first case is avoidable most of the time: HTTP/2 server determines the end of the request body in another way that is unrelated to the request headers and never expects the body to be in the HTTP/1.1 chunked format (the one with hexadecimal chunk lengths).
 
-The concrete variation of detection techniques:
+The concrete variations of detection techniques are:
 1. We send a smuggled version of `Transfer-Encoding: chunked` (e.g. `transfer_encoding:chunked`) and different bodies: valid is `0\r\n\r\n` and invalid is `999\r\n`.
 
    In case the responses are different, we can be sure that the backend server receives and processes the smuggled header. There's no reason for the frontend to do this: HTTP/2 doesn't use the chunked format we sent, so that it would be invalid.
