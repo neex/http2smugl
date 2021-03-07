@@ -9,22 +9,27 @@ import (
 type ResponseSet struct {
 	statuses             map[string]struct{}
 	minLength, maxLength int
-	hasNonErrorResponses bool
+	hasNonTimeouts       bool
 }
 
-func (rs *ResponseSet) AccountResponse(response *HTTPMessage) {
-	length := len(response.Body)
+func (rs *ResponseSet) AccountResponse(response *HTTPMessage, isTimeout bool) {
+	length := 0
+	if response != nil {
+		length = len(response.Body)
+	}
 	if rs.statuses == nil {
 		rs.statuses = make(map[string]struct{})
 		rs.minLength = length
 		rs.maxLength = length
 	}
-	status, ok := response.Headers.Get(":status")
-	if !ok {
-		status = "<error>"
-	} else {
-		rs.hasNonErrorResponses = true
+	status := "<error>"
+	if response != nil {
+		responseStatus, ok := response.Headers.Get(":status")
+		if ok {
+			status = responseStatus
+		}
 	}
+	rs.hasNonTimeouts = rs.hasNonTimeouts || !isTimeout
 	rs.statuses[status] = struct{}{}
 	if rs.minLength > length {
 		rs.minLength = length
@@ -63,6 +68,6 @@ func (rs *ResponseSet) String() string {
 	return buf.String()
 }
 
-func (rs *ResponseSet) AllResponsesAreErrors() bool {
-	return !rs.hasNonErrorResponses
+func (rs *ResponseSet) AllResponsesAreTimeouts() bool {
+	return !rs.hasNonTimeouts
 }

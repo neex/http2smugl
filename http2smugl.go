@@ -31,6 +31,7 @@ func main() {
 		threads     int
 		targetsFile string
 		csvLog      string
+		tryHTTP3    bool
 	)
 
 	requestCmd := &cobra.Command{
@@ -116,13 +117,19 @@ func main() {
 				}()
 			}
 
+			var targetURLs []string
 			for i := range targets {
 				if !strings.Contains(targets[i], "/") {
-					targets[i] = fmt.Sprintf("https://%s/", targets[i])
+					targetURLs = append(targetURLs, fmt.Sprintf("https://%s/", targets[i]))
+					if tryHTTP3 {
+						targetURLs = append(targetURLs, fmt.Sprintf("https+h3://%s/", targets[i]))
+					}
+				} else {
+					targetURLs = append(targetURLs, targets[i])
 				}
 			}
 
-			return detectMultipleTargets(targets,
+			return detectMultipleTargets(targetURLs,
 				connectAddr,
 				threads,
 				timeout,
@@ -148,6 +155,7 @@ func main() {
 	detectCmd.Flags().IntVar(&threads, "threads", 100, "number of threads")
 	detectCmd.Flags().StringVar(&targetsFile, "targets", "", "read targets list from this file")
 	detectCmd.Flags().StringVar(&csvLog, "csv-log", "", "log results into csv file")
+	detectCmd.Flags().BoolVar(&tryHTTP3, "try-http3", false, "try HTTP/3 too when no protocol specified in a target")
 
 	rootCmd.AddCommand(requestCmd, detectCmd)
 
@@ -166,7 +174,10 @@ func unquoteArg(s string) string {
 func doAndPrintRequest(params *RequestParams, bodyLines int) {
 	response, err := DoRequest(params)
 	if err != nil {
-		fmt.Printf("Error is %v\n", err)
+		fmt.Printf("Error: %v\n", err)
+	}
+	if response == nil {
+		return
 	}
 	for _, h := range response.Headers {
 		fmt.Printf("%s: %s\n", h.Name, h.Value)

@@ -5,90 +5,13 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
-	"net/url"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 )
 
-type RequestParams struct {
-	Target              *url.URL
-	Method, ConnectAddr string
-	Headers             Headers
-	NoAutoHeaders       bool
-	Body                []byte
-	Timeout             time.Duration
-	AddContentLength    bool
-}
-
-type HTTPMessage struct {
-	Headers Headers
-	Body    []byte
-}
-
-type RSTError struct {
-	Code http2.ErrCode
-}
-
-func (r RSTError) Error() string {
-	return fmt.Sprintf("received RST frame, code=%v", r.Code)
-}
-
-func DoRequest(params *RequestParams) (*HTTPMessage, error) {
-	var scheme string
-
-	switch params.Target.Scheme {
-	case "https":
-	default:
-		return nil, fmt.Errorf(`scheme is %#v, must be "https"`, params.Target.Scheme)
-	}
-
-	var headers Headers
-
-	if params.NoAutoHeaders {
-		headers = params.Headers
-	} else {
-		headers = Headers{
-			{":authority", params.Target.Host},
-			{":method", params.Method},
-			{":path", params.Target.Path},
-			{":scheme", scheme},
-			{"user-agent", "Mozilla/5.0"},
-		}
-
-		toSkip := make(map[string]struct{})
-		for i := range headers {
-			h := &headers[i]
-			if v, ok := params.Headers.Get(h.Name); ok {
-				h.Value = v
-				toSkip[h.Name] = struct{}{}
-			}
-		}
-
-		for _, h := range params.Headers {
-			if _, ok := toSkip[h.Name]; ok {
-				delete(toSkip, h.Name)
-				continue
-			}
-			headers = append(headers, h)
-		}
-	}
-
-	if params.AddContentLength {
-		headers = append(headers, Header{"content-length", strconv.Itoa(len(params.Body))})
-	}
-
-	targetAddr := params.ConnectAddr
-	if targetAddr == "" {
-		targetAddr = params.Target.Host
-	}
-
-	return sendRequest(targetAddr, params.Target.Host, false, &HTTPMessage{headers, params.Body}, params.Timeout)
-}
-
-func sendRequest(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (response *HTTPMessage, err error) {
+func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (response *HTTPMessage, err error) {
 	address := connectAddr
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
 		address = net.JoinHostPort(address, "443")
@@ -124,7 +47,7 @@ func sendRequest(connectAddr, serverName string, noTLS bool, request *HTTPMessag
 		})
 	}
 
-	if _, err := c.Write(prepareRequest(request)); err != nil {
+	if _, err := c.Write(prepareHTTP2Request(request)); err != nil {
 		return nil, err
 	}
 
@@ -178,7 +101,7 @@ func sendRequest(connectAddr, serverName string, noTLS bool, request *HTTPMessag
 	return
 }
 
-func prepareRequest(request *HTTPMessage) []byte {
+func prepareHTTP2Request(request *HTTPMessage) []byte {
 	var hpackBuf []byte
 	for i := range request.Headers {
 		hpackBuf = hpackAppendHeader(hpackBuf, &request.Headers[i])

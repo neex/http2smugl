@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"time"
 )
@@ -74,11 +75,11 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 		}
 		var (
 			response  *HTTPMessage
-			err       = errors.New("not started")
-			triesLeft = 5
+			err       = errNotStarted
+			triesLeft = 3
 		)
 
-		for err != nil && triesLeft > 0 {
+		for err != nil && mayResolveInFuture(err) && triesLeft > 0 {
 			triesLeft--
 			response, err = DoRequest(&RequestParams{
 				Target:      u,
@@ -90,24 +91,21 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 			})
 		}
 
-		if err != nil {
-			_, ok := err.(RSTError)
-			if !ok {
-				log.Printf("request: %v, error: %v", params, err)
-			}
+		if err != nil && !isRSTError(err) && !isTimeoutError(err) {
+			log.Printf("request: %v, error: %v", params, err)
 		}
 
 		if doValid {
-			validResponses.AccountResponse(response)
+			validResponses.AccountResponse(response, isTimeoutError(err))
 		} else {
-			invalidResponses.AccountResponse(response)
+			invalidResponses.AccountResponse(response, isTimeoutError(err))
 		}
 	}
 
 	result := Indistinguishable
 	if validResponses.DistinguishableFrom(invalidResponses) {
-		if validResponses.AllResponsesAreErrors() || invalidResponses.AllResponsesAreErrors() {
-			result = DistinguishableByTiming // TODO: this is not accurate
+		if validResponses.AllResponsesAreTimeouts() || invalidResponses.AllResponsesAreTimeouts() {
+			result = DistinguishableByTiming
 		} else {
 			result = DistinguishableNotByTiming
 		}
@@ -118,4 +116,30 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 			params, validResponses, invalidResponses, result)
 	}
 	return result, nil
+}
+
+func isRSTError(err error) bool {
+	_, ok := err.(RSTError)
+	return ok
+}
+
+func isTimeoutError(err error) bool {
+	n, ok := err.(net.Error)
+	if !ok {
+		return false
+	}
+	return n.Timeout()
+}
+
+var errNotStarted = errors.New("not started")
+
+func mayResolveInFuture(err error) bool {
+	if err == errNotStarted {
+		return true
+	}
+	n, ok := err.(net.Error)
+	if !ok {
+		return false
+	}
+	return n.Timeout() || n.Temporary()
 }

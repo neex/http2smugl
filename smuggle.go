@@ -13,6 +13,7 @@ const (
 	HeaderSmugglingUnderscore
 	HeaderSmugglingSpacedHeader
 	HeaderSmugglingNewlineValue
+	HeaderSmugglingNewlineLongerValue
 	HeaderSmugglingNewlineName
 	HeaderSmugglingNewlinePath
 	HeaderSmugglingUnicodeCharacters
@@ -20,6 +21,7 @@ const (
 
 var SmugglingMethods = []SmugglingMethod{
 	HeaderSmugglingNewlineValue,
+	HeaderSmugglingNewlineLongerValue,
 	HeaderSmugglingNewlineName,
 	HeaderSmugglingNewlinePath,
 	HeaderSmugglingSpacedHeader,
@@ -46,12 +48,23 @@ func (s SmugglingMethod) Smuggle(h *Header, url *url.URL, variant SmugglingVaria
 		h.Value = fmt.Sprintf("val%s%s:%s", v.Newline, h.Name, h.Value)
 		h.Name = v.Header
 
+	case HeaderSmugglingNewlineLongerValue:
+		v := variant.(*newlineHeaderParams)
+		pad := strings.Repeat("0", 10)
+		if strings.HasPrefix(h.Value, "-") {
+			h.Value = fmt.Sprintf("val%s%s:%s%s%s", v.Newline, h.Name, h.Value[0], pad, h.Value[1:])
+		} else {
+			h.Value = fmt.Sprintf("val%s%s:%s%s", v.Newline, h.Name, pad, h.Value)
+		}
+
+		h.Name = v.Header
+
 	case HeaderSmugglingNewlineName:
 		v := variant.(*newlineHeaderParams)
 		h.Name = fmt.Sprintf("%s%s%s", v.Header, v.Newline, h.Name)
 
 	case HeaderSmugglingNewlinePath:
-		v := variant.(*newlinePathParams)
+		v := string(variant.(newlinePathParams))
 		h.Value = fmt.Sprintf("%s HTTP/1.1%s%s: %s%sfake-header: ", url.Path, v, h.Name, h.Value, v)
 		h.Name = ":path"
 
@@ -109,6 +122,14 @@ func (s SmugglingMethod) GetVariants() (variants []SmugglingVariant) {
 		}
 		return
 
+	case HeaderSmugglingNewlineLongerValue:
+		for _, nl := range newlines {
+			for _, h := range []string{"header", " header", "x-forwarded-for"} {
+				variants = append(variants, &newlineHeaderParams{nl, h})
+			}
+		}
+		return
+
 	case HeaderSmugglingNewlinePath:
 		for _, nl := range newlines {
 			variants = append(variants, newlinePathParams(nl))
@@ -133,6 +154,8 @@ func (s SmugglingMethod) String() string {
 		return "header smuggling via adding space"
 	case HeaderSmugglingNewlineValue:
 		return "header smuggling via newline in header value"
+	case HeaderSmugglingNewlineLongerValue:
+		return "header smuggling via newline in header value (longer)"
 	case HeaderSmugglingNewlineName:
 		return "header smuggling via newline in header name"
 	case HeaderSmugglingNewlinePath:

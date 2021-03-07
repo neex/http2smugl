@@ -125,6 +125,14 @@ This subcommand tries to detect the HTTP request smuggling using various techniq
 
 The command will output something only if it could detect that the server parses a smuggled header. To understand what does it mean, please read the corresponding section.
 
+### HTTP/3 support
+
+An experimental support for HTTP/3 (quic) has been implemented. However, I do not suggest using it as I did not find a single bug related to HTTP/3.
+
+To use HTTP/3 with `request` subcommand, provide `https+h3://` proto in the URL instead of just `https`. The same is supported in the `detect` command.
+
+There is also a `--try-http3` flag for the `request` subcommand, which changes the behaviour in case the protocol is not specified in the URL (just hostname). If the flag is present, the command will try `https+h3` proto for such entries on the command line or the targets file (as well as HTTP/2). E.g. `http2smugl detect --try-http3 www.example.com` will try  both HTTP/3 and HTTP/2, but  `http2smugl detect --try-http3 https://www.example.com/` will still try only HTTP/2.
+
 ### Known false-positives
 
 In this section, I describe some cases when the tool says the responses are "distinguishable", but no vulnerability could exist.
@@ -140,6 +148,12 @@ To detect you're dealing with ELB, you can use the `Server` response header. If 
 Apache Traffic Server is mainly used at Yahoo. It processes HTTP/2 in an unusual way: it converts it to HTTP/1.1 in memory and then re-parses the resulting request. Thus, while a header technically could be "smuggled", there's no way it will result in a vulnerability: you could send the same bytes to an HTTP/1.1 connection.
 
 The easiest way to detect you're dealing with ATS (besides the `Server` header) is by sending a `TRACE` request. If a `Max-Forwards: 0` header present in the request, ATS will return an answer to `TRACE` requests by default without forwarding it to the backend.
+
+#### Microsoft IIS
+
+It seems like Microsoft IIS supports decoding chunked encoding inside HTTP/2 bodies. That is strange behaviour; however, it is innocent from the security point of view.
+
+To detect you're dealing with IIS, you can send a request with a "transfer-encoding:chunked" header and an incorrect chunked body. If you see `Microsoft-HTTPAPI` or something like this in the `Server` header, that is it.
 
 #### Other WAFs
 

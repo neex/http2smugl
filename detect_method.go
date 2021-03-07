@@ -27,9 +27,6 @@ var DetectMethods = []DetectMethod{
 func (d DetectMethod) GetRequests(sm SmugglingMethod, target *url.URL, smuggleVariant SmugglingVariant) (valid, invalid DetectRequestParams) {
 	switch d {
 	case DetectContentLengthParsing:
-		if sm == HeaderSmugglingNone {
-			panic(fmt.Errorf("cannot use %#v with %#v", smuggleVariant, d))
-		}
 		valid.AdditionalHeaders = Headers{{"content-length", "1"}}
 		invalid.AdditionalHeaders = Headers{{"content-length", "-1"}}
 		sm.Smuggle(&valid.AdditionalHeaders[0], target, smuggleVariant)
@@ -66,9 +63,9 @@ func (d DetectMethod) GetRequests(sm SmugglingMethod, target *url.URL, smuggleVa
 func (d DetectMethod) AllowsSmugglingMethod(sm SmugglingMethod) bool {
 	switch d {
 	case DetectContentLengthParsing:
-		return sm != HeaderSmugglingNone && sm != HeaderSmugglingUnicodeCharacters
+		return sm != HeaderSmugglingUnicodeCharacters
 	default:
-		return true
+		return sm != HeaderSmugglingNewlineLongerValue
 	}
 }
 
