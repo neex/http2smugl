@@ -8,7 +8,6 @@ type PaddingMethod int
 
 const (
 	PaddingHeadersNone PaddingMethod = iota
-	PaddingHeadersUnicodeSame
 	PaddingHeadersASCIISame
 )
 
@@ -28,11 +27,6 @@ func (p PaddingMethod) Headers() (headers Headers) {
 	case PaddingHeadersNone:
 		// No headers
 
-	case PaddingHeadersUnicodeSame:
-		for i := 0; i < PaddingHeaderCount; i++ {
-			headers = append(headers, Header{`¯\_(ツ)_/¯`, "val"})
-		}
-
 	case PaddingHeadersASCIISame:
 		for i := 0; i < PaddingHeaderCount; i++ {
 			headers = append(headers, Header{"header", "val"})
@@ -49,8 +43,6 @@ func (p PaddingMethod) String() string {
 	switch p {
 	case PaddingHeadersNone:
 		return "no padding headers"
-	case PaddingHeadersUnicodeSame:
-		return "pad with same unicode header"
 	case PaddingHeadersASCIISame:
 		return "pad with same ASCII header"
 	default:

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -54,7 +55,10 @@ func main() {
 				bodyToSend = []byte(unquoteArg(bodyStr))
 			}
 
-			target := args[0]
+			target, err := url.Parse(args[0])
+			if err != nil {
+				return err
+			}
 			var headers []Header
 			for _, h := range args[1:] {
 				parts := strings.SplitN(h, ":", 2)
@@ -160,15 +164,15 @@ func unquoteArg(s string) string {
 }
 
 func doAndPrintRequest(params *RequestParams, bodyLines int) {
-	headers, body, err := DoRequest(params)
+	response, err := DoRequest(params)
 	if err != nil {
 		fmt.Printf("Error is %v\n", err)
 	}
-	for _, h := range headers {
+	for _, h := range response.Headers {
 		fmt.Printf("%s: %s\n", h.Name, h.Value)
 	}
 	fmt.Println()
-	lines := bytes.Split(body, []byte{'\n'})
+	lines := bytes.Split(response.Body, []byte{'\n'})
 	for i, l := range lines {
 		if bodyLines < 0 || i < bodyLines {
 			fmt.Println(string(l))

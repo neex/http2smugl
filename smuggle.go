@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -18,18 +19,18 @@ const (
 )
 
 var SmugglingMethods = []SmugglingMethod{
-	HeaderSmugglingNone,
-	HeaderSmugglingSpacedHeader,
-	HeaderSmugglingUnderscore,
-	HeaderSmugglingNewlinePath,
 	HeaderSmugglingNewlineValue,
 	HeaderSmugglingNewlineName,
+	HeaderSmugglingNewlinePath,
+	HeaderSmugglingSpacedHeader,
+	HeaderSmugglingUnderscore,
 	HeaderSmugglingUnicodeCharacters,
+	HeaderSmugglingNone,
 }
 
 type SmugglingVariant fmt.Stringer
 
-func (s SmugglingMethod) Smuggle(h *Header, variant SmugglingVariant) {
+func (s SmugglingMethod) Smuggle(h *Header, url *url.URL, variant SmugglingVariant) {
 	switch s {
 	case HeaderSmugglingNone:
 		// no action
@@ -51,7 +52,7 @@ func (s SmugglingMethod) Smuggle(h *Header, variant SmugglingVariant) {
 
 	case HeaderSmugglingNewlinePath:
 		v := variant.(*newlinePathParams)
-		h.Value = fmt.Sprintf("%s HTTP/1.1%s%s: %s%sfake: ", v.Path, v.Newline, h.Name, h.Value, v.Newline)
+		h.Value = fmt.Sprintf("%s HTTP/1.1%s%s: %s%sfake-header: ", url.Path, v, h.Name, h.Value, v)
 		h.Name = ":path"
 
 	case HeaderSmugglingUnicodeCharacters:
@@ -80,7 +81,7 @@ func (s SmugglingMethod) Smuggle(h *Header, variant SmugglingVariant) {
 	}
 }
 
-func (s SmugglingMethod) GetVariants(path string) (variants []SmugglingVariant) {
+func (s SmugglingMethod) GetVariants() (variants []SmugglingVariant) {
 	newlines := []string{"\r\n", "\r", "\n"}
 	switch s {
 	case HeaderSmugglingNone, HeaderSmugglingUnderscore:
@@ -110,7 +111,7 @@ func (s SmugglingMethod) GetVariants(path string) (variants []SmugglingVariant) 
 
 	case HeaderSmugglingNewlinePath:
 		for _, nl := range newlines {
-			variants = append(variants, &newlinePathParams{nl, path})
+			variants = append(variants, newlinePathParams(nl))
 		}
 		return
 
@@ -163,12 +164,10 @@ func (p *newlineHeaderParams) String() string {
 	return fmt.Sprintf("newline=%#v fake_header=%s", p.Newline, p.Header)
 }
 
-type newlinePathParams struct {
-	Newline, Path string
-}
+type newlinePathParams string
 
-func (p *newlinePathParams) String() string {
-	return fmt.Sprintf("newline=%#v", p.Newline)
+func (p newlinePathParams) String() string {
+	return fmt.Sprintf("newline=%#v", p)
 }
 
 type unicodeSmugglingParams int

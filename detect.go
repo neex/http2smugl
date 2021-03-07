@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"time"
 )
 
@@ -30,29 +31,36 @@ func (p *DetectParams) String() string {
 	)
 }
 
-type DetectResult bool
+type DetectResult int
 
 const (
-	Indistinguishable DetectResult = false
-	Distinguishable   DetectResult = true
+	Indistinguishable DetectResult = iota
+	DistinguishableByTiming
+	DistinguishableNotByTiming
 )
 
 func (r DetectResult) String() string {
 	switch r {
-	case Distinguishable:
-		return "distinguishable"
 	case Indistinguishable:
 		return "indistinguishable"
+	case DistinguishableByTiming:
+		return "distinguishable by timing"
+	case DistinguishableNotByTiming:
+		return "distinguishable not by timing"
 	default:
 		return fmt.Sprintf("unknown result value: %#v", r)
 	}
 }
 
 func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbose bool) (DetectResult, error) {
+	u, err := url.Parse(params.Target)
+	if err != nil {
+		return Indistinguishable, err
+	}
 	prefixHeaders := params.PaddingMethod.Headers()
-	valid, invalid := params.DetectMethod.GetRequests(params.SmugglingMethod, params.SmugglingVariant)
-	valid.Headers = prefixHeaders.Combine(valid.Headers)
-	invalid.Headers = prefixHeaders.Combine(invalid.Headers)
+	valid, invalid := params.DetectMethod.GetRequests(params.SmugglingMethod, u, params.SmugglingVariant)
+	valid.AdditionalHeaders = prefixHeaders.Combine(valid.AdditionalHeaders)
+	invalid.AdditionalHeaders = prefixHeaders.Combine(invalid.AdditionalHeaders)
 
 	validResponses := &ResponseSet{}
 	invalidResponses := &ResponseSet{}
@@ -65,19 +73,18 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 			request = invalid
 		}
 		var (
-			headers   Headers
-			body      []byte
+			response  *HTTPMessage
 			err       = errors.New("not started")
 			triesLeft = 5
 		)
 
 		for err != nil && triesLeft > 0 {
 			triesLeft--
-			headers, body, err = DoRequest(&RequestParams{
-				Target:      params.Target,
+			response, err = DoRequest(&RequestParams{
+				Target:      u,
 				Method:      params.RequestMethod,
 				ConnectAddr: connectTo,
-				Headers:     request.Headers,
+				Headers:     request.AdditionalHeaders,
 				Body:        request.Body,
 				Timeout:     timeout,
 			})
@@ -91,18 +98,21 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 		}
 
 		if doValid {
-			validResponses.AccountRequest(headers, body)
+			validResponses.AccountResponse(response)
 		} else {
-			invalidResponses.AccountRequest(headers, body)
+			invalidResponses.AccountResponse(response)
 		}
 	}
 
-	var result DetectResult
+	result := Indistinguishable
 	if validResponses.DistinguishableFrom(invalidResponses) {
-		result = Distinguishable
-	} else {
-		result = Indistinguishable
+		if validResponses.AllResponsesAreErrors() || invalidResponses.AllResponsesAreErrors() {
+			result = DistinguishableByTiming // TODO: this is not accurate
+		} else {
+			result = DistinguishableNotByTiming
+		}
 	}
+
 	if verbose {
 		log.Printf("%s: valid=%s, invalid=%s, result=%v",
 			params, validResponses, invalidResponses, result)

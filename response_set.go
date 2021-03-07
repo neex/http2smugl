@@ -9,18 +9,21 @@ import (
 type ResponseSet struct {
 	statuses             map[string]struct{}
 	minLength, maxLength int
+	hasNonErrorResponses bool
 }
 
-func (rs *ResponseSet) AccountRequest(headers Headers, body []byte) {
-	length := len(body)
+func (rs *ResponseSet) AccountResponse(response *HTTPMessage) {
+	length := len(response.Body)
 	if rs.statuses == nil {
 		rs.statuses = make(map[string]struct{})
 		rs.minLength = length
 		rs.maxLength = length
 	}
-	status, ok := headers.Get(":status")
+	status, ok := response.Headers.Get(":status")
 	if !ok {
 		status = "<error>"
+	} else {
+		rs.hasNonErrorResponses = true
 	}
 	rs.statuses[status] = struct{}{}
 	if rs.minLength > length {
@@ -58,4 +61,8 @@ func (rs *ResponseSet) String() string {
 	sort.Strings(statuses)
 	_, _ = fmt.Fprintf(buf, "%v, %v <= size <= %v", statuses, rs.minLength, rs.maxLength)
 	return buf.String()
+}
+
+func (rs *ResponseSet) AllResponsesAreErrors() bool {
+	return !rs.hasNonErrorResponses
 }

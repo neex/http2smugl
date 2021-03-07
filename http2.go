@@ -14,12 +14,18 @@ import (
 )
 
 type RequestParams struct {
-	Target, Method, ConnectAddr string
-	Headers                     Headers
-	NoAutoHeaders               bool
-	Body                        []byte
-	Timeout                     time.Duration
-	AddContentLength            bool
+	Target              *url.URL
+	Method, ConnectAddr string
+	Headers             Headers
+	NoAutoHeaders       bool
+	Body                []byte
+	Timeout             time.Duration
+	AddContentLength    bool
+}
+
+type HTTPMessage struct {
+	Headers Headers
+	Body    []byte
 }
 
 type RSTError struct {
@@ -30,25 +36,13 @@ func (r RSTError) Error() string {
 	return fmt.Sprintf("received RST frame, code=%v", r.Code)
 }
 
-func DoRequest(params *RequestParams) (Headers, []byte, error) {
-	parsed, err := url.Parse(params.Target)
-	if err != nil {
-		return nil, nil, err
-	}
+func DoRequest(params *RequestParams) (*HTTPMessage, error) {
+	var scheme string
 
-	var (
-		noTLS  bool
-		scheme string
-	)
-
-	switch parsed.Scheme {
-	case "http+h2c", "h2c":
-		noTLS = true
-		scheme = "http"
-	case "https", "h2":
-		scheme = "https"
+	switch params.Target.Scheme {
+	case "https":
 	default:
-		return nil, nil, fmt.Errorf(`scheme is %#v, must be "https" or "http+h2c"`, parsed.Scheme)
+		return nil, fmt.Errorf(`scheme is %#v, must be "https"`, params.Target.Scheme)
 	}
 
 	var headers Headers
@@ -57,9 +51,9 @@ func DoRequest(params *RequestParams) (Headers, []byte, error) {
 		headers = params.Headers
 	} else {
 		headers = Headers{
-			{":authority", parsed.Host},
+			{":authority", params.Target.Host},
 			{":method", params.Method},
-			{":path", parsed.Path},
+			{":path", params.Target.Path},
 			{":scheme", scheme},
 			{"user-agent", "Mozilla/5.0"},
 		}
@@ -88,53 +82,13 @@ func DoRequest(params *RequestParams) (Headers, []byte, error) {
 
 	targetAddr := params.ConnectAddr
 	if targetAddr == "" {
-		targetAddr = parsed.Host
+		targetAddr = params.Target.Host
 	}
 
-	return sendPreparedRequest(targetAddr, parsed.Host, noTLS, prepareRequest(headers, params.Body), params.Timeout)
+	return sendRequest(targetAddr, params.Target.Host, false, &HTTPMessage{headers, params.Body}, params.Timeout)
 }
 
-func prepareRequest(headers Headers, body []byte) []byte {
-	var hpackBuf []byte
-	for i := range headers {
-		hpackBuf = hpackAppendHeader(hpackBuf, &headers[i])
-	}
-
-	requestBuf := bytes.NewBuffer(nil)
-	requestBuf.Write([]byte(http2.ClientPreface))
-
-	framer := http2.NewFramer(requestBuf, nil)
-
-	_ = framer.WriteSettings(http2.Setting{
-		ID:  http2.SettingInitialWindowSize,
-		Val: (1 << 31) - 1,
-	})
-
-	_ = framer.WriteWindowUpdate(0, (1<<31)-(1<<16)-1)
-
-	_ = framer.WriteHeaders(http2.HeadersFrameParam{
-		StreamID:      1,
-		BlockFragment: hpackBuf,
-		EndStream:     len(body) == 0,
-		EndHeaders:    true,
-	})
-
-	start := 0
-	for start < len(body) {
-		end := start + 65536
-		if end > len(body) {
-			end = len(body)
-		}
-		_ = framer.WriteData(1, end == len(body), body[start:end])
-		start = end
-	}
-
-	_ = framer.WriteSettingsAck()
-
-	return requestBuf.Bytes()
-}
-
-func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []byte, timeout time.Duration) (headers Headers, body []byte, err error) {
+func sendRequest(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (response *HTTPMessage, err error) {
 	address := connectAddr
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
 		address = net.JoinHostPort(address, "443")
@@ -142,17 +96,17 @@ func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []b
 
 	name, port, err := net.SplitHostPort(address)
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid address %v: %w", address, err)
+		return nil, fmt.Errorf("invalid address %v: %w", address, err)
 	}
 	ip, err := DefaultDNSCache.Lookup(name)
 	if err != nil {
-		return nil, nil, fmt.Errorf("lookup for %v failed: %w", name, err)
+		return nil, fmt.Errorf("lookup for %v failed: %w", name, err)
 	}
 	address = net.JoinHostPort(ip.String(), port)
 
 	tcpConn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	defer func() { _ = tcpConn.Close() }()
@@ -170,12 +124,13 @@ func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []b
 		})
 	}
 
-	if _, err := c.Write(request); err != nil {
-		return nil, nil, err
+	if _, err := c.Write(prepareRequest(request)); err != nil {
+		return nil, err
 	}
 
+	response = &HTTPMessage{}
 	headersDecoder := hpack.NewDecoder(^uint32(0), func(f hpack.HeaderField) {
-		headers = append(headers, Header{f.Name, f.Value})
+		response.Headers = append(response.Headers, Header{f.Name, f.Value})
 	})
 
 	framer := http2.NewFramer(nil, c)
@@ -197,20 +152,20 @@ func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []b
 		switch f := f.(type) {
 		case *http2.HeadersFrame:
 			if _, err := headersDecoder.Write(f.HeaderBlockFragment()); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			headersDone = f.HeadersEnded()
 			hasBody = !f.StreamEnded()
 
 		case *http2.ContinuationFrame:
 			if _, err := headersDecoder.Write(f.HeaderBlockFragment()); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			headersDone = f.HeadersEnded()
 
 		case *http2.DataFrame:
 			// we should send window update, but who cares
-			body = append(body, f.Data()...)
+			response.Body = append(response.Body, f.Data()...)
 			bodyRead = f.StreamEnded()
 
 		case *http2.RSTStreamFrame:
@@ -223,6 +178,45 @@ func sendPreparedRequest(connectAddr, serverName string, noTLS bool, request []b
 	return
 }
 
+func prepareRequest(request *HTTPMessage) []byte {
+	var hpackBuf []byte
+	for i := range request.Headers {
+		hpackBuf = hpackAppendHeader(hpackBuf, &request.Headers[i])
+	}
+
+	requestBuf := bytes.NewBuffer(nil)
+	requestBuf.Write([]byte(http2.ClientPreface))
+
+	framer := http2.NewFramer(requestBuf, nil)
+
+	_ = framer.WriteSettings(http2.Setting{
+		ID:  http2.SettingInitialWindowSize,
+		Val: (1 << 31) - 1,
+	})
+
+	_ = framer.WriteWindowUpdate(0, (1<<31)-(1<<16)-1)
+
+	_ = framer.WriteHeaders(http2.HeadersFrameParam{
+		StreamID:      1,
+		BlockFragment: hpackBuf,
+		EndStream:     len(request.Body) == 0,
+		EndHeaders:    true,
+	})
+
+	start := 0
+	for start < len(request.Body) {
+		end := start + 65536
+		if end > len(request.Body) {
+			end = len(request.Body)
+		}
+		_ = framer.WriteData(1, end == len(request.Body), request.Body[start:end])
+		start = end
+	}
+
+	_ = framer.WriteSettingsAck()
+
+	return requestBuf.Bytes()
+}
 func hpackAppendHeader(dst []byte, h *Header) []byte {
 	dst = append(dst, 0x10)
 	dst = hpackAppendVarInt(dst, 7, uint64(len(h.Name)))

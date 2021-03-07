@@ -1,10 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"net/url"
+)
 
 type DetectRequestParams struct {
-	Headers Headers
-	Body    []byte
+	AdditionalHeaders Headers
+	Body              []byte
 }
 
 type DetectMethod int
@@ -16,39 +19,41 @@ const (
 )
 
 var DetectMethods = []DetectMethod{
-	DetectContentLengthParsing, DetectChunkedBodyValidation, DetectChunkedBodyConsumption,
+	DetectChunkedBodyConsumption,
+	DetectChunkedBodyValidation,
+	DetectContentLengthParsing,
 }
 
-func (d DetectMethod) GetRequests(sm SmugglingMethod, smuggleVariant SmugglingVariant) (valid, invalid DetectRequestParams) {
+func (d DetectMethod) GetRequests(sm SmugglingMethod, target *url.URL, smuggleVariant SmugglingVariant) (valid, invalid DetectRequestParams) {
 	switch d {
 	case DetectContentLengthParsing:
 		if sm == HeaderSmugglingNone {
 			panic(fmt.Errorf("cannot use %#v with %#v", smuggleVariant, d))
 		}
-		valid.Headers = Headers{{"content-length", "1"}}
-		invalid.Headers = Headers{{"content-length", "-1"}}
-		sm.Smuggle(&valid.Headers[0], smuggleVariant)
-		sm.Smuggle(&invalid.Headers[0], smuggleVariant)
+		valid.AdditionalHeaders = Headers{{"content-length", "1"}}
+		invalid.AdditionalHeaders = Headers{{"content-length", "-1"}}
+		sm.Smuggle(&valid.AdditionalHeaders[0], target, smuggleVariant)
+		sm.Smuggle(&invalid.AdditionalHeaders[0], target, smuggleVariant)
 
 	case DetectChunkedBodyValidation:
-		valid.Headers = Headers{
+		valid.AdditionalHeaders = Headers{
 			{"content-length", "5"},
 			{"transfer-encoding", "chunked"},
 		}
-		sm.Smuggle(&valid.Headers[1], smuggleVariant)
+		sm.Smuggle(&valid.AdditionalHeaders[1], target, smuggleVariant)
 
-		invalid.Headers = valid.Headers
+		invalid.AdditionalHeaders = valid.AdditionalHeaders
 
 		valid.Body = []byte("0\r\n\r\n")
 		invalid.Body = []byte("X\r\n\r\n")
 
 	case DetectChunkedBodyConsumption:
-		valid.Headers = Headers{
+		valid.AdditionalHeaders = Headers{
 			{"content-length", "5"},
 			{"transfer-encoding", "chunked"},
 		}
-		sm.Smuggle(&valid.Headers[1], smuggleVariant)
-		invalid.Headers = valid.Headers
+		sm.Smuggle(&valid.AdditionalHeaders[1], target, smuggleVariant)
+		invalid.AdditionalHeaders = valid.AdditionalHeaders
 		valid.Body = []byte("0\r\n\r\n")
 		invalid.Body = []byte("999\r\n")
 

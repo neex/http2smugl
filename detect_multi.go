@@ -1,10 +1,8 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
-	"net/url"
 	"sync"
 	"time"
 )
@@ -21,23 +19,15 @@ func detectMultipleTargets(targets []string,
 
 	rand.Shuffle(len(targets), func(i, j int) { targets[i], targets[j] = targets[j], targets[i] })
 
-	queue := make(chan *DetectParams)
-	randomized := make(chan *DetectParams)
+	queue := make(chan *DetectParams, threads)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		randomizeJobOrder(1000000, queue, randomized)
-	}()
+		defer close(queue)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for _, t := range targets {
-			getDetectJobs(t, queue)
-		}
-		close(queue)
+		pushDetectJobs(targets, queue)
 	}()
 
 	wg.Add(threads)
@@ -46,7 +36,7 @@ func detectMultipleTargets(targets []string,
 		go func() {
 			defer wg.Done()
 
-			for job := range randomized {
+			for job := range queue {
 				distinguishable, err := Detect(job, connectTo, timeout, verbose)
 				var verdict string
 				if err != nil {
@@ -68,55 +58,31 @@ func detectMultipleTargets(targets []string,
 	return nil
 }
 
-func getDetectJobs(target string, queue chan<- *DetectParams) {
-	path := "/"
-	if u, err := url.Parse(target); err == nil {
-		path = u.Path
-	}
-
+func pushDetectJobs(targets []string, queue chan<- *DetectParams) {
 	for _, dm := range DetectMethods {
 		for _, sm := range SmugglingMethods {
 			if !dm.AllowsSmugglingMethod(sm) {
 				continue
 			}
-			variants := sm.GetVariants(path)
-			for _, v := range variants {
-				for _, pm := range PaddingMethods {
-					for _, rm := range []string{"GET", "POST", "OPTIONS"} {
-						queue <- &DetectParams{
-							Target:           target,
-							DetectMethod:     dm,
-							SmugglingMethod:  sm,
-							SmugglingVariant: v,
-							PaddingMethod:    pm,
-							RequestMethod:    rm,
+			for _, pm := range PaddingMethods {
+				for _, rm := range []string{"POST", "OPTIONS", "GET"} {
+					variants := sm.GetVariants()
+					for _, v := range variants {
+						for _, target := range targets {
+							queue <- &DetectParams{
+								Target:           target,
+								DetectMethod:     dm,
+								SmugglingMethod:  sm,
+								SmugglingVariant: v,
+								PaddingMethod:    pm,
+								RequestMethod:    rm,
+							}
 						}
 					}
 				}
 			}
 		}
 	}
-}
-
-func randomizeJobOrder(randSize int, in <-chan *DetectParams, out chan<- *DetectParams) {
-	if randSize <= 0 {
-		panic(errors.New("randomizeJobOrder: randSize <= 0"))
-	}
-	buf := make([]*DetectParams, randSize)
-	for job := range in {
-		idx := rand.Intn(randSize)
-		old := buf[idx]
-		buf[idx] = job
-		if old != nil {
-			out <- old
-		}
-	}
-	for _, job := range buf {
-		if job != nil {
-			out <- job
-		}
-	}
-	close(out)
 }
 
 func init() {
