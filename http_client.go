@@ -5,8 +5,6 @@ import (
 	"net/url"
 	"strconv"
 	"time"
-
-	"golang.org/x/net/http2"
 )
 
 type RequestParams struct {
@@ -24,12 +22,27 @@ type HTTPMessage struct {
 	Body    []byte
 }
 
-type RSTError struct {
-	Code http2.ErrCode
+type ConnDropError struct {
+	Wrapped error
 }
 
-func (r RSTError) Error() string {
-	return fmt.Sprintf("received RST frame, code=%v", r.Code)
+func (r ConnDropError) Error() string {
+	return fmt.Sprintf("server dropped connection, error=%v", r.Wrapped)
+}
+
+type TimeoutError struct {
+}
+
+func (t TimeoutError) Error() string {
+	return "timeout"
+}
+
+func (t TimeoutError) Timeout() bool {
+	return true
+}
+
+func (t TimeoutError) Temporary() bool {
+	return false
 }
 
 func DoRequest(params *RequestParams) (*HTTPMessage, error) {

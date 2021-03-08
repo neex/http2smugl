@@ -6,9 +6,11 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"log"
 	"net"
+	"strconv"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/lucas-clemente/quic-go"
 	"github.com/marten-seemann/qpack"
@@ -28,9 +30,30 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	if err != nil {
 		return nil, fmt.Errorf("lookup for %v failed: %w", name, err)
 	}
-	address = net.JoinHostPort(ip.String(), port)
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, fmt.Errorf("invalid port: %w", err)
+	}
 
-	session, err := quic.DialAddrEarly(address,
+	udpConn, err := net.ListenPacket("udp", ":0")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = udpConn.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = udpConn.Close()
+	}()
+
+	udpAddr := &net.UDPAddr{
+		IP:   ip,
+		Port: portInt,
+	}
+
+	session, err := quic.DialEarlyContext(ctx, udpConn, udpAddr, serverName,
 		&tls.Config{
 			NextProtos:         []string{"h3-29", "h3-32"}, // TODO: not good
 			ServerName:         serverName,
@@ -40,8 +63,6 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 			Versions:           []quic.VersionNumber{quic.VersionDraft29, quic.VersionDraft32},
 			MaxIncomingStreams: -1,
 			KeepAlive:          true,
-			HandshakeTimeout:   timeout,
-			MaxIdleTimeout:     timeout,
 		})
 
 	if err != nil {
@@ -55,13 +76,11 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	if err != nil {
 		return nil, err
 	}
-
 	frames := prepareHTTP3Request(request)
 	for _, f := range frames {
-		if _, err := requestStream.Write(f); err != nil {
-			return nil, err
-		}
+		_, _ = requestStream.Write(f)
 	}
+
 	if err := requestStream.Close(); err != nil {
 		return nil, err
 	}
@@ -80,7 +99,20 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	for {
 		frame, err := readFrame(b)
 		if err != nil {
-			break
+			if ctx.Err() != nil {
+				return nil, TimeoutError{}
+			}
+
+			if err == io.EOF {
+				break
+			}
+
+			if qErr, ok := err.(interface{ IsApplicationError() bool }); ok {
+				if qErr.IsApplicationError() {
+					return nil, ConnDropError{err}
+				}
+			}
+			return nil, err
 		}
 		switch frame.Type {
 		case 0x0:
@@ -90,7 +122,7 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 				return nil, err
 			}
 		default:
-			log.Printf("unknown frame type: %#v %#v", frame.Type, string(frame.Data))
+			// ignore unknown frame types for now
 		}
 	}
 
@@ -132,24 +164,6 @@ func prepareHTTP3Request(request *HTTPMessage) [][]byte {
 	return frames
 }
 
-func encodeBody(body []byte) (frames [][]byte) {
-	start := 0
-	buf := bytes.NewBuffer(nil)
-	for start < len(body) {
-		buf.Reset()
-		end := start + 65536
-		if end > len(body) {
-			end = len(body)
-		}
-		writeVarInt(buf, 0x00)
-		writeVarInt(buf, uint64(end-start))
-		buf.Write(body[start:end])
-		frames = append(frames, buf.Bytes())
-		start = end
-	}
-	return frames
-}
-
 func encodeHeaders(headers Headers) []byte {
 	qpackBuf := bytes.NewBuffer(nil)
 	e := qpack.NewEncoder(qpackBuf)
@@ -161,6 +175,17 @@ func encodeHeaders(headers Headers) []byte {
 	writeVarInt(headersFrame, uint64(qpackBuf.Len()))
 	headersFrame.Write(qpackBuf.Bytes())
 	return headersFrame.Bytes()
+}
+
+func encodeBody(body []byte) (frames [][]byte) {
+	if len(body) == 0 {
+		return nil
+	}
+	buf := bytes.NewBuffer(nil)
+	writeVarInt(buf, 0x00)
+	writeVarInt(buf, uint64(len(body)))
+	buf.Write(body)
+	return [][]byte{buf.Bytes()}
 }
 
 func setupSession(session quic.Session) error {

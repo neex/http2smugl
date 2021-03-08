@@ -92,7 +92,7 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 			bodyRead = f.StreamEnded()
 
 		case *http2.RSTStreamFrame:
-			err = RSTError{Code: f.ErrCode}
+			err = ConnDropError{Wrapped: fmt.Errorf("error code %v", f.ErrCode)}
 			return
 		}
 

@@ -91,7 +91,7 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 			})
 		}
 
-		if err != nil && !isRSTError(err) && !isTimeoutError(err) {
+		if err != nil && (verbose || (!isRSTError(err) && !isTimeoutError(err))) {
 			log.Printf("request: %v, error: %v", params, err)
 		}
 
@@ -119,7 +119,7 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 }
 
 func isRSTError(err error) bool {
-	_, ok := err.(RSTError)
+	_, ok := err.(ConnDropError)
 	return ok
 }
 
