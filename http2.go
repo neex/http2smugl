@@ -68,6 +68,13 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 			return
 		}
 
+		if ga, ok := f.(*http2.GoAwayFrame); ok {
+			err = ConnDropError{
+				Wrapped: fmt.Errorf("received GOAWAY: error code %v", ga.ErrCode),
+			}
+			return
+		}
+
 		if f.Header().StreamID != 1 {
 			continue
 		}
@@ -95,7 +102,6 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 			err = ConnDropError{Wrapped: fmt.Errorf("error code %v", f.ErrCode)}
 			return
 		}
-
 	}
 
 	return
