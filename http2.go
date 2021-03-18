@@ -120,10 +120,10 @@ func prepareHTTP2Request(request *HTTPMessage) []byte {
 
 	_ = framer.WriteSettings(http2.Setting{
 		ID:  http2.SettingInitialWindowSize,
-		Val: (1 << 31) - 1,
+		Val: (1 << 30) - 1,
 	})
 
-	_ = framer.WriteWindowUpdate(0, (1<<31)-(1<<16)-1)
+	_ = framer.WriteWindowUpdate(0, (1<<30)-(1<<16)-1)
 
 	_ = framer.WriteHeaders(http2.HeadersFrameParam{
 		StreamID:      1,
