@@ -16,7 +16,9 @@ For more information on the HTTP Request Smuggling, please refer to [Portswigger
 
 ## Why focus on HTTP/2?
 
-In HTTP/2, all HTTP headers' names and values are binary. That means that technically they can contain additional spaces or even newlines. Despite these things being rejected by most implementations, we hope to find ones that allow such headers. They will corrupt the converted HTTP/1.1 request to the backend.
+In HTTP/2, all HTTP headers' names and values are binary. That means that technically they can contain additional spaces or even newlines.
+
+[RFC7540#10.3](https://tools.ietf.org/html/rfc7540#section-10.3) states that implementations that translate HTTP/2 requests to HTTP/1 must take care of the limitations on the character set that arise from such a conversion; most implementations indeed reject them. Despite this, we hope to find ones that allow such headers. They will corrupt the converted HTTP/1.1 request to the backend.
 
 Another point is that some recent fixes related to HTTP Request Smuggling might be implemented only for HTTP/1.1 parsers.
 
