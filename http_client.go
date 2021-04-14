@@ -12,6 +12,7 @@ type RequestParams struct {
 	Method, ConnectAddr string
 	Headers             Headers
 	NoAutoHeaders       bool
+	NoUserAgent         bool
 	Body                []byte
 	Timeout             time.Duration
 	AddContentLength    bool
@@ -67,7 +68,10 @@ func DoRequest(params *RequestParams) (*HTTPMessage, error) {
 			{":method", params.Method},
 			{":path", params.Target.Path},
 			{":scheme", "https"},
-			{"user-agent", "Mozilla/5.0"},
+		}
+
+		if !params.NoUserAgent {
+			headers = append(headers, Header{"user-agent", "Mozilla/5.0"})
 		}
 
 		toSkip := make(map[string]struct{})

@@ -23,6 +23,7 @@ func main() {
 		bodyFile, bodyStr string
 		requestMethod     string
 		noAutoHeaders     bool
+		noUserAgent       bool
 		autoContentLength bool
 		bodyToSend        []byte
 		bodyLines         int
@@ -79,6 +80,7 @@ func main() {
 				ConnectAddr:      connectAddr,
 				Headers:          headers,
 				NoAutoHeaders:    noAutoHeaders,
+				NoUserAgent:      noUserAgent,
 				AddContentLength: autoContentLength,
 				Body:             bodyToSend,
 				Timeout:          timeout,
@@ -148,6 +150,7 @@ func main() {
 	requestCmd.Flags().StringVar(&bodyStr, "body-str", "", "send this string to body (escape seqs like \\r \\n are supported)")
 	requestCmd.Flags().StringVar(&bodyFile, "body-file", "", "read request body from this file")
 	requestCmd.Flags().BoolVar(&noAutoHeaders, "no-auto-headers", false, "don't send pseudo-headers automatically")
+	requestCmd.Flags().BoolVar(&noUserAgent, "no-user-agent", false, "don't send user-agent")
 	requestCmd.Flags().BoolVar(&autoContentLength, "auto-content-length", false, "add \"content-length\" header with body size")
 	requestCmd.Flags().IntVar(&bodyLines, "body-lines", 10, "how many body lines to print (-1 means no limit)")
 
