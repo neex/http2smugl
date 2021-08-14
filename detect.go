@@ -65,6 +65,7 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 
 	validResponses := &ResponseSet{}
 	invalidResponses := &ResponseSet{}
+	var rawRequest string
 
 	for i := 0; i < 14 && validResponses.DistinguishableFrom(invalidResponses); i++ {
 		// The order is: V I ( V V V I I I ) x 4
@@ -81,7 +82,7 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 
 		for err != nil && mayResolveInFuture(err) && triesLeft > 0 {
 			triesLeft--
-			response, err = DoRequest(&RequestParams{
+			rawRequest, response, err = DoRequest(&RequestParams{
 				Target:      u,
 				Method:      params.RequestMethod,
 				ConnectAddr: connectTo,
@@ -90,11 +91,11 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 				Timeout:     timeout,
 			})
 		}
-
-		if err != nil && (verbose || (!isRSTError(err) && !isTimeoutError(err))) {
-			log.Printf("request: %v, error: %v", params, err)
+		if verbose{
+			if err != nil && (!isRSTError(err) && !isTimeoutError(err)) {
+				log.Printf("request: %v, error: %v", params, err)
+			}
 		}
-
 		if doValid {
 			validResponses.AccountResponse(response, isTimeoutError(err))
 		} else {
@@ -104,6 +105,8 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 
 	result := Indistinguishable
 	if validResponses.DistinguishableFrom(invalidResponses) {
+		// todo
+		fmt.Println(rawRequest)
 		if validResponses.AllResponsesAreTimeouts() || invalidResponses.AllResponsesAreTimeouts() {
 			result = DistinguishableByTiming
 		} else {

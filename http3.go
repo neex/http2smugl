@@ -16,28 +16,28 @@ import (
 	"github.com/marten-seemann/qpack"
 )
 
-func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (response *HTTPMessage, err error) {
+func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (rawRequest string, response *HTTPMessage, err error) {
 	address := connectAddr
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
 		address = net.JoinHostPort(address, "443")
 	}
-
+	rawRequest = requestRaw(request.Headers, request.Body)
 	name, port, err := net.SplitHostPort(address)
 	if err != nil {
-		return nil, fmt.Errorf("invalid address %v: %w", address, err)
+		return rawRequest, nil, fmt.Errorf("invalid address %v: %w", address, err)
 	}
 	ip, err := DefaultDNSCache.Lookup(name)
 	if err != nil {
-		return nil, fmt.Errorf("lookup for %v failed: %w", name, err)
+		return rawRequest, nil, fmt.Errorf("lookup for %v failed: %w", name, err)
 	}
 	portInt, err := strconv.Atoi(port)
 	if err != nil {
-		return nil, fmt.Errorf("invalid port: %w", err)
+		return rawRequest,nil, fmt.Errorf("invalid port: %w", err)
 	}
 
 	udpConn, err := net.ListenPacket("udp", ":0")
 	if err != nil {
-		return nil, err
+		return rawRequest,nil, err
 	}
 	defer func() { _ = udpConn.Close() }()
 
@@ -66,15 +66,15 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 		})
 
 	if err != nil {
-		return nil, err
+		return rawRequest,nil, err
 	}
 	defer func() { _ = session.CloseWithError(0, "") }()
 	if err := setupSession(session); err != nil {
-		return nil, err
+		return rawRequest,nil, err
 	}
 	requestStream, err := session.OpenStream()
 	if err != nil {
-		return nil, err
+		return rawRequest,nil, err
 	}
 	frames := prepareHTTP3Request(request)
 	for _, f := range frames {
@@ -82,7 +82,7 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	}
 
 	if err := requestStream.Close(); err != nil {
-		return nil, err
+		return rawRequest,nil, err
 	}
 
 	var (
@@ -100,7 +100,7 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 		frame, err := readFrame(b)
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil, TimeoutError{}
+				return rawRequest,nil, TimeoutError{}
 			}
 
 			if err == io.EOF {
@@ -109,24 +109,24 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 
 			if qErr, ok := err.(interface{ IsApplicationError() bool }); ok {
 				if qErr.IsApplicationError() {
-					return nil, ConnDropError{err}
+					return rawRequest,nil, ConnDropError{err}
 				}
 			}
-			return nil, err
+			return rawRequest,nil, err
 		}
 		switch frame.Type {
 		case 0x0:
 			body = append(body, frame.Data...)
 		case 0x1:
 			if _, err := decoder.Write(frame.Data); err != nil {
-				return nil, err
+				return rawRequest,nil, err
 			}
 		default:
 			// ignore unknown frame types for now
 		}
 	}
 
-	return &HTTPMessage{
+	return rawRequest, &HTTPMessage{
 		Headers: headers,
 		Body:    body,
 	}, nil

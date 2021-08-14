@@ -3,6 +3,7 @@ module github.com/neex/http2smugl
 go 1.15
 
 require (
+	github.com/fatih/color v1.7.0
 	github.com/golang/protobuf v1.5.1 // indirect
 	github.com/lucas-clemente/quic-go v0.19.3
 	github.com/marten-seemann/qpack v0.2.1

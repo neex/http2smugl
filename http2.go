@@ -4,32 +4,36 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
+	"github.com/fatih/color"
 	"net"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 )
 
-func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (response *HTTPMessage, err error) {
+func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (rawRequest string, response *HTTPMessage, err error) {
 	address := connectAddr
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
 		address = net.JoinHostPort(address, "443")
 	}
 
+	rawRequest = requestRaw(request.Headers, request.Body)
+
 	name, port, err := net.SplitHostPort(address)
 	if err != nil {
-		return nil, fmt.Errorf("invalid address %v: %w", address, err)
+		return rawRequest,nil, fmt.Errorf("invalid address %v: %w", address, err)
 	}
 	ip, err := DefaultDNSCache.Lookup(name)
 	if err != nil {
-		return nil, fmt.Errorf("lookup for %v failed: %w", name, err)
+		return rawRequest,nil, fmt.Errorf("lookup for %v failed: %w", name, err)
 	}
 	address = net.JoinHostPort(ip.String(), port)
 
 	tcpConn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
-		return nil, err
+		return rawRequest,nil, err
 	}
 
 	defer func() { _ = tcpConn.Close() }()
@@ -48,7 +52,7 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	}
 
 	if _, err := c.Write(prepareHTTP2Request(request)); err != nil {
-		return nil, err
+		return rawRequest,nil, err
 	}
 
 	response = &HTTPMessage{}
@@ -82,14 +86,14 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 		switch f := f.(type) {
 		case *http2.HeadersFrame:
 			if _, err := headersDecoder.Write(f.HeaderBlockFragment()); err != nil {
-				return nil, err
+				return rawRequest,nil, err
 			}
 			headersDone = f.HeadersEnded()
 			hasBody = !f.StreamEnded()
 
 		case *http2.ContinuationFrame:
 			if _, err := headersDecoder.Write(f.HeaderBlockFragment()); err != nil {
-				return nil, err
+				return rawRequest,nil, err
 			}
 			headersDone = f.HeadersEnded()
 
@@ -166,4 +170,13 @@ func hpackAppendVarInt(dst []byte, n byte, val uint64) []byte {
 		dst = append(dst, byte(0x80|(val&0x7f)))
 	}
 	return append(dst, byte(val))
+}
+func requestRaw(headers Headers, body []byte) (request string)  {
+	var s string
+	for _,v := range headers{
+		s = s + fmt.Sprintf("%s: %s\n", strconv.Quote(v.Name), color.GreenString(strconv.Quote(v.Value)))
+	}
+	s = s + "\r\n"
+	s += color.GreenString(strconv.Quote(string(body)))
+	return s
 }

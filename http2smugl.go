@@ -175,7 +175,7 @@ func unquoteArg(s string) string {
 }
 
 func doAndPrintRequest(params *RequestParams, bodyLines int) {
-	response, err := DoRequest(params)
+	_, response, err := DoRequest(params)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 	}
