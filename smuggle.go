@@ -27,7 +27,7 @@ var SmugglingMethods = []SmugglingMethod{
 	HeaderSmugglingNewlinePath,
 	HeaderSmugglingSpacedHeader,
 	HeaderSmugglingUnderscore,
-	//HeaderSmugglingUnicodeCharacters,
+	//HeaderSmugglingUnicodeCharacters, // turn off
 	HeaderSmugglingNone,
 	HeaderSmugglingNewlineMethod,
 	// todo
@@ -72,7 +72,7 @@ func (s SmugglingMethod) Smuggle(h *Header, url *url.URL, variant SmugglingVaria
 		h.Name = ":path"
 	case HeaderSmugglingNewlineMethod:
 		v := string(variant.(newlinePathParams))
-		h.Value = fmt.Sprintf("METHOD HTTP/1.1%s%s: %s%sfake-header: x", v, h.Name, h.Value, v)
+		h.Value = fmt.Sprintf("METHOD /robots.txt HTTP/1.1%s%s: %s%sfake-header: x", v, h.Name, h.Value, v)
 		h.Name = ":method"
 
 	case HeaderSmugglingUnicodeCharacters:

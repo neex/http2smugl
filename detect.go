@@ -104,6 +104,7 @@ func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbo
 	}
 
 	result := Indistinguishable
+	//fmt.Println(rawRequest)
 	if validResponses.DistinguishableFrom(invalidResponses) {
 		// todo
 		fmt.Println(rawRequest)
