@@ -52,7 +52,7 @@ func (s SmugglingMethod) Smuggle(h *Header, url *url.URL, variant SmugglingVaria
 		v := variant.(*newlineHeaderParams)
 		pad := strings.Repeat("0", 10)
 		if strings.HasPrefix(h.Value, "-") {
-			h.Value = fmt.Sprintf("val%s%s:%s%s%s", v.Newline, h.Name, h.Value[0], pad, h.Value[1:])
+			h.Value = fmt.Sprintf("val%s%s:-%s%s", v.Newline, h.Name, pad, h.Value[1:])
 		} else {
 			h.Value = fmt.Sprintf("val%s%s:%s%s", v.Newline, h.Name, pad, h.Value)
 		}
