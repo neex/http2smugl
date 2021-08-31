@@ -55,12 +55,12 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 
 	session, err := quic.DialEarlyContext(ctx, udpConn, udpAddr, serverName,
 		&tls.Config{
-			NextProtos:         []string{"h3-29", "h3-32"}, // TODO: not good
+			NextProtos:         []string{"h3", "h3-29"},
 			ServerName:         serverName,
 			InsecureSkipVerify: true,
 		},
 		&quic.Config{
-			Versions:           []quic.VersionNumber{quic.VersionDraft29, quic.VersionDraft32},
+			Versions:           []quic.VersionNumber{quic.Version1, quic.VersionDraft29},
 			MaxIncomingStreams: -1,
 			KeepAlive:          true,
 		})
