@@ -174,9 +174,9 @@ func hpackAppendVarInt(dst []byte, n byte, val uint64) []byte {
 func requestRaw(headers Headers, body []byte) (request string)  {
 	var s string
 	for _,v := range headers{
-		s = s + fmt.Sprintf("%s: %s\n", strconv.Quote(v.Name), color.GreenString(strconv.Quote(v.Value)))
+		s = s + fmt.Sprintf("%s: %s\n", color.CyanString(strconv.Quote(v.Name)), color.GreenString(strconv.Quote(v.Value)))
 	}
 	s = s + "\r\n"
-	s += color.GreenString(strconv.Quote(string(body)))
+	s += color.GreenString(color.YellowString(strconv.Quote(string(body))))
 	return s
 }

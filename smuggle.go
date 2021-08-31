@@ -174,6 +174,8 @@ func (s SmugglingMethod) String() string {
 		return "header smuggling via newline in header path"
 	case HeaderSmugglingUnicodeCharacters:
 		return "header smuggling via unicode lowercase/uppercase"
+	case HeaderSmugglingNewlineMethod:
+		return "header smuggling via newline in header method"
 	default:
 		return "unknown header smuggling method"
 	}
