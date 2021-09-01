@@ -124,8 +124,7 @@ func (s SmugglingMethod) GetVariants() (variants []SmugglingVariant) {
 
 	case HeaderSmugglingNewlineValue:
 		for _, nl := range newlines {
-			//for _, h := range []string{"header", " header", "x-forwarded-for"} { // todo
-			for _, h := range []string{"header"} {
+			for _, h := range []string{"header", " header", "x-forwarded-for"} {
 				variants = append(variants, &newlineHeaderParams{nl, h})
 			}
 		}
