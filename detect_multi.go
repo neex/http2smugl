@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 )
@@ -12,6 +13,7 @@ func detectMultipleTargets(targets []string,
 	threads int,
 	timeout time.Duration,
 	csv *CSVLogWriter,
+	methods []string,
 	verbose bool) error {
 	if len(targets) == 0 {
 		return fmt.Errorf("no targets specified")
@@ -27,7 +29,7 @@ func detectMultipleTargets(targets []string,
 		defer wg.Done()
 		defer close(queue)
 
-		pushDetectJobs(targets, queue)
+		pushDetectJobs(targets, queue, methods)
 	}()
 
 	wg.Add(threads)
@@ -58,14 +60,14 @@ func detectMultipleTargets(targets []string,
 	return nil
 }
 
-func pushDetectJobs(targets []string, queue chan<- *DetectParams) {
+func pushDetectJobs(targets []string, queue chan<- *DetectParams, methods []string) {
 	for _, dm := range DetectMethods {
 		for _, sm := range SmugglingMethods {
 			if !dm.AllowsSmugglingMethod(sm) {
 				continue
 			}
 			for _, pm := range PaddingMethods {
-				for _, rm := range []string{"POST", "OPTIONS", "GET"} {
+				for _, rm := range methods {
 					variants := sm.GetVariants()
 					for _, v := range variants {
 						for _, target := range targets {
@@ -75,7 +77,7 @@ func pushDetectJobs(targets []string, queue chan<- *DetectParams) {
 								SmugglingMethod:  sm,
 								SmugglingVariant: v,
 								PaddingMethod:    pm,
-								RequestMethod:    rm,
+								RequestMethod:    strings.TrimSpace(rm),
 							}
 						}
 					}

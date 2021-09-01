@@ -29,6 +29,7 @@ func main() {
 		bodyLines         int
 		// detect subcommand options
 		verbose     bool
+		detectMethod string
 		threads     int
 		targetsFile string
 		csvLog      string
@@ -130,12 +131,19 @@ func main() {
 					targetURLs = append(targetURLs, targets[i])
 				}
 			}
+			var methods []string
+			if strings.Contains(detectMethod, ","){
+				methods = strings.Split(strings.ToUpper(detectMethod),",")
+			}else{
+				methods = append(methods, strings.ToUpper(detectMethod))
+			}
 
 			return detectMultipleTargets(targetURLs,
 				connectAddr,
 				threads,
 				timeout,
 				csvWriter,
+				methods,
 				verbose)
 		},
 	}
@@ -155,6 +163,7 @@ func main() {
 	requestCmd.Flags().IntVar(&bodyLines, "body-lines", 10, "how many body lines to print (-1 means no limit)")
 
 	detectCmd.Flags().BoolVar(&verbose, "verbose", false, "be more verbose")
+	detectCmd.Flags().StringVar(&detectMethod, "method", "GET,POST,OPTIONS", "detect method")
 	detectCmd.Flags().IntVar(&threads, "threads", 100, "number of threads")
 	detectCmd.Flags().StringVar(&targetsFile, "targets", "", "read targets list from this file")
 	detectCmd.Flags().StringVar(&csvLog, "csv-log", "", "log results into csv file")

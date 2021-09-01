@@ -30,7 +30,6 @@ var SmugglingMethods = []SmugglingMethod{
 	HeaderSmugglingUnicodeCharacters,
 	HeaderSmugglingNone,
 	HeaderSmugglingNewlineMethod,
-	// todo
 }
 
 type SmugglingVariant fmt.Stringer
