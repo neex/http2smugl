@@ -155,7 +155,7 @@ func main() {
 	requestCmd.Flags().IntVar(&bodyLines, "body-lines", 10, "how many body lines to print (-1 means no limit)")
 
 	detectCmd.Flags().BoolVar(&verbose, "verbose", false, "be more verbose")
-	detectCmd.Flags().IntVar(&threads, "threads", 20, "number of threads")
+	detectCmd.Flags().IntVar(&threads, "threads", 100, "number of threads")
 	detectCmd.Flags().StringVar(&targetsFile, "targets", "", "read targets list from this file")
 	detectCmd.Flags().StringVar(&csvLog, "csv-log", "", "log results into csv file")
 	detectCmd.Flags().BoolVar(&tryHTTP3, "try-http3", false, "try HTTP/3 too when no protocol specified in a target")

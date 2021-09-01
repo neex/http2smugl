@@ -70,11 +70,6 @@ func DoRequest(params *RequestParams) (string, *HTTPMessage, error) {
 			{":path", params.Target.Path},
 			{":scheme", "https"},
 		}
-		//if strings.HasPrefix("METHOD", headers[1]){
-		//
-		//}
-
-		//fmt.Println(params.Method)
 
 		if !params.NoUserAgent {
 			headers = append(headers, Header{"user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36"})

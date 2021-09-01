@@ -16,6 +16,7 @@ import (
 	"github.com/marten-seemann/qpack"
 )
 
+// noTLS unused
 func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (rawRequest string, response *HTTPMessage, err error) {
 	address := connectAddr
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
