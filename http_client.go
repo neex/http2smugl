@@ -63,7 +63,7 @@ func DoRequest(params *RequestParams) (*HTTPMessage, error) {
 	if params.NoAutoHeaders {
 		headers = params.Headers
 	} else {
-		if params.Target.Path == ""{
+		if params.Target.Path == "" {
 			params.Target.Path = "/"
 		}
 		headers = Headers{
