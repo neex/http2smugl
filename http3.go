@@ -188,7 +188,7 @@ func encodeBody(body []byte) (frames [][]byte) {
 	return [][]byte{buf.Bytes()}
 }
 
-func setupSession(session quic.Session) error {
+func setupSession(session quic.EarlyConnection) error {
 	str, err := session.OpenUniStream()
 	if err != nil {
 		return err
