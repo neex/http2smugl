@@ -111,7 +111,7 @@ Of course, it is required that the frontend will pass UTF-8 header names/values 
 
 ## Usage
 
-To install the tool, run `go get github.com/neex/http2smugl`.
+To install the tool, run `go install github.com/neex/http2smugl@latest`.
 
 The tool contains two subcommands: `request` and `detect`. The first one is just for crafting HTTP/2 requests: most client tools do not accept invalid headers, so it's handy to have one that sends user input to the server as-is.
 
