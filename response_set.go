@@ -15,7 +15,9 @@ type ResponseSet struct {
 func (rs *ResponseSet) AccountResponse(response *HTTPMessage, isTimeout bool) {
 	length := 0
 	if response != nil {
-		length = len(response.Body)
+		for _, body := range response.Body {
+			length += len(body)
+		}
 	}
 	if rs.statuses == nil {
 		rs.statuses = make(map[string]struct{})

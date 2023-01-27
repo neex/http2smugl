@@ -95,7 +95,9 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 
 		case *http2.DataFrame:
 			// we should send window update, but who cares
-			response.Body = append(response.Body, f.Data()...)
+			var b []byte
+			b = append(b, f.Data()...)
+			response.Body = append(response.Body, b)
 			bodyRead = f.StreamEnded()
 
 		case *http2.RSTStreamFrame:
@@ -132,14 +134,17 @@ func prepareHTTP2Request(request *HTTPMessage) []byte {
 		EndHeaders:    true,
 	})
 
-	start := 0
-	for start < len(request.Body) {
-		end := start + 65536
-		if end > len(request.Body) {
-			end = len(request.Body)
+	for i, b := range request.Body {
+		lastChunk := i == len(request.Body)-1
+		start := 0
+		for start < len(b) {
+			end := start + 65536
+			if end > len(b) {
+				end = len(b)
+			}
+			_ = framer.WriteData(1, lastChunk && end == len(b), b[start:end])
+			start = end
 		}
-		_ = framer.WriteData(1, end == len(request.Body), request.Body[start:end])
-		start = end
 	}
 
 	_ = framer.WriteSettingsAck()

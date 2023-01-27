@@ -7,7 +7,7 @@ import (
 
 type DetectRequestParams struct {
 	AdditionalHeaders Headers
-	Body              []byte
+	Body              [][]byte
 }
 
 type DetectMethod int
@@ -41,8 +41,8 @@ func (d DetectMethod) GetRequests(sm SmugglingMethod, target *url.URL, smuggleVa
 
 		invalid.AdditionalHeaders = valid.AdditionalHeaders
 
-		valid.Body = []byte("0\r\n\r\n")
-		invalid.Body = []byte("X\r\n\r\n")
+		valid.Body = [][]byte{[]byte("0\r\n\r\n")}
+		invalid.Body = [][]byte{[]byte("X\r\n\r\n")}
 
 	case DetectChunkedBodyConsumption:
 		valid.AdditionalHeaders = Headers{
@@ -51,8 +51,8 @@ func (d DetectMethod) GetRequests(sm SmugglingMethod, target *url.URL, smuggleVa
 		}
 		sm.Smuggle(&valid.AdditionalHeaders[1], target, smuggleVariant)
 		invalid.AdditionalHeaders = valid.AdditionalHeaders
-		valid.Body = []byte("0\r\n\r\n")
-		invalid.Body = []byte("999\r\n")
+		valid.Body = [][]byte{[]byte("0\r\n\r\n")}
+		invalid.Body = [][]byte{[]byte("999\r\n\r\n")}
 
 	default:
 		panic(fmt.Errorf("unknown detect method: %#v", d))

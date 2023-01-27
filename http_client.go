@@ -13,14 +13,14 @@ type RequestParams struct {
 	Headers             Headers
 	NoAutoHeaders       bool
 	NoUserAgent         bool
-	Body                []byte
+	Body                [][]byte
 	Timeout             time.Duration
 	AddContentLength    bool
 }
 
 type HTTPMessage struct {
 	Headers Headers
-	Body    []byte
+	Body    [][]byte
 }
 
 type ConnDropError struct {
@@ -96,7 +96,11 @@ func DoRequest(params *RequestParams) (*HTTPMessage, error) {
 	}
 
 	if params.AddContentLength {
-		headers = append(headers, Header{"content-length", strconv.Itoa(len(params.Body))})
+		totalLength := 0
+		for _, body := range params.Body {
+			totalLength += len(body)
+		}
+		headers = append(headers, Header{"content-length", strconv.Itoa(totalLength)})
 	}
 
 	targetAddr := params.ConnectAddr

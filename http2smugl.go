@@ -2,12 +2,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/url"
-	"strconv"
+	"os"
 	"strings"
 	"time"
 
@@ -20,12 +21,13 @@ func main() {
 		timeout     time.Duration
 		connectAddr string
 		// request subcommand options
-		bodyFile, bodyStr string
+		bodyFile          string
+		bodyStr           []string
 		requestMethod     string
 		noAutoHeaders     bool
 		noUserAgent       bool
 		autoContentLength bool
-		bodyToSend        []byte
+		bodyToSend        [][]byte
 		bodyLines         int
 		// detect subcommand options
 		verbose     bool
@@ -45,16 +47,18 @@ func main() {
 				return fmt.Errorf("cannot combine --method and --no-auto-headers")
 			}
 			if bodyFile != "" {
-				if bodyStr != "" {
+				if bodyStr != nil {
 					return errors.New("both --body and --body-str specified")
 				}
-				data, err := ioutil.ReadFile(bodyFile)
+				data, err := os.ReadFile(bodyFile)
 				if err != nil {
 					return err
 				}
-				bodyToSend = data
+				bodyToSend = append(bodyToSend, data)
 			} else {
-				bodyToSend = []byte(unquoteArg(bodyStr))
+				for _, s := range bodyStr {
+					bodyToSend = append(bodyToSend, []byte(maybeUnquoteArg(s)))
+				}
 			}
 
 			target, err := url.Parse(args[0])
@@ -71,12 +75,12 @@ func main() {
 					parts = strings.SplitN(parts[1], ":", 2)
 					parts[0] = ":" + parts[0]
 				}
-				headers = append(headers, Header{unquoteArg(parts[0]), unquoteArg(parts[1])})
+				headers = append(headers, Header{maybeUnquoteArg(parts[0]), maybeUnquoteArg(parts[1])})
 			}
 
 			doAndPrintRequest(&RequestParams{
 				Target:           target,
-				Method:           unquoteArg(requestMethod),
+				Method:           maybeUnquoteArg(requestMethod),
 				ConnectAddr:      connectAddr,
 				Headers:          headers,
 				NoAutoHeaders:    noAutoHeaders,
@@ -147,7 +151,7 @@ func main() {
 	rootCmd.PersistentFlags().DurationVar(&timeout, "timeout", 10*time.Second, "timeout to all requests")
 	rootCmd.PersistentFlags().StringVar(&connectAddr, "connect-to", "", "override target ip")
 	requestCmd.Flags().StringVar(&requestMethod, "method", "GET", "request method")
-	requestCmd.Flags().StringVar(&bodyStr, "body-str", "", "send this string to body (escape seqs like \\r \\n are supported)")
+	requestCmd.Flags().StringArrayVar(&bodyStr, "body-str", nil, "send this string to body (escape seqs like \\r \\n are supported)")
 	requestCmd.Flags().StringVar(&bodyFile, "body-file", "", "read request body from this file")
 	requestCmd.Flags().BoolVar(&noAutoHeaders, "no-auto-headers", false, "don't send pseudo-headers automatically")
 	requestCmd.Flags().BoolVar(&noUserAgent, "no-user-agent", false, "don't send user-agent")
@@ -167,11 +171,90 @@ func main() {
 	}
 }
 
-func unquoteArg(s string) string {
-	if decoded, err := strconv.Unquote(`"` + s + `"`); err == nil {
-		return decoded
+func unquoteArg(s string) (string, error) {
+	buf := bytes.NewBuffer(nil)
+	repeatCount := 0
+	for i := 0; i < len(s); i++ {
+		var (
+			toPush   byte
+			skipPush bool
+		)
+
+		if s[i] == '\\' {
+			i++
+
+			if i >= len(s) {
+				return "", fmt.Errorf("unexpected end of string in escape sequence")
+			}
+
+			switch s[i] {
+			case 'x', 'X':
+				i += 2
+				if i > len(s) {
+					return "", fmt.Errorf("unexpected end of string in \\x code")
+				}
+				b, err := hex.DecodeString(s[i-1 : i+1])
+				if err != nil {
+					return "", fmt.Errorf("invalid \\x code: %#v", s[i-1:i+1])
+				}
+				toPush = b[0]
+			case 'r':
+				toPush = '\r'
+			case 'n':
+				toPush = '\n'
+			case 't':
+				toPush = '\t'
+			case 'v':
+				toPush = '\v'
+			case 'b':
+				toPush = '\b'
+			case 'a':
+				toPush = '\a'
+			case 'R':
+				if repeatCount > 0 {
+					return "", fmt.Errorf("nested repeat sequences are not supported")
+				}
+				i += 1
+				if i >= len(s) || s[i] < '0' || s[i] > '9' {
+					return "", fmt.Errorf("invalid repeat count")
+				}
+				for ; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
+					repeatCount = repeatCount*10 + int(s[i]-'0')
+				}
+				i--
+				skipPush = true
+			default:
+				toPush = s[i]
+			}
+		} else {
+			toPush = s[i]
+		}
+
+		if !skipPush {
+			if repeatCount > 0 {
+				for j := 0; j < repeatCount; j++ {
+					buf.WriteByte(toPush)
+				}
+				repeatCount = 0
+			} else {
+				buf.WriteByte(toPush)
+			}
+		}
 	}
-	return s
+
+	if repeatCount > 0 {
+		return "", fmt.Errorf("repeat sequence is not closed")
+	}
+
+	return buf.String(), nil
+}
+
+func maybeUnquoteArg(s string) string {
+	unquoted, err := unquoteArg(s)
+	if err != nil {
+		return s
+	}
+	return unquoted
 }
 
 func doAndPrintRequest(params *RequestParams, bodyLines int) {
@@ -186,7 +269,7 @@ func doAndPrintRequest(params *RequestParams, bodyLines int) {
 		fmt.Printf("%s: %s\n", h.Name, h.Value)
 	}
 	fmt.Println()
-	lines := bytes.Split(response.Body, []byte{'\n'})
+	lines := bytes.Split(bytes.Join(response.Body, nil), []byte{'\n'})
 	for i, l := range lines {
 		if bodyLines < 0 || i < bodyLines {
 			fmt.Println(string(l))

@@ -10,10 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/lucas-clemente/quic-go"
 	"github.com/marten-seemann/qpack"
+	"golang.org/x/net/context"
 )
 
 func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (response *HTTPMessage, err error) {
@@ -62,7 +61,6 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 		&quic.Config{
 			Versions:           []quic.VersionNumber{quic.Version1, quic.VersionDraft29},
 			MaxIncomingStreams: -1,
-			KeepAlive:          true,
 		})
 
 	if err != nil {
@@ -87,7 +85,7 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 
 	var (
 		headers Headers
-		body    []byte
+		body    [][]byte
 	)
 	decoder := qpack.NewDecoder(func(f qpack.HeaderField) {
 		headers = append(headers, Header{
@@ -116,7 +114,9 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 		}
 		switch frame.Type {
 		case 0x0:
-			body = append(body, frame.Data...)
+			var b []byte
+			b = append(b, frame.Data...)
+			body = append(body, b)
 		case 0x1:
 			if _, err := decoder.Write(frame.Data); err != nil {
 				return nil, err
@@ -177,15 +177,18 @@ func encodeHeaders(headers Headers) []byte {
 	return headersFrame.Bytes()
 }
 
-func encodeBody(body []byte) (frames [][]byte) {
+func encodeBody(body [][]byte) (frames [][]byte) {
 	if len(body) == 0 {
 		return nil
 	}
-	buf := bytes.NewBuffer(nil)
-	writeVarInt(buf, 0x00)
-	writeVarInt(buf, uint64(len(body)))
-	buf.Write(body)
-	return [][]byte{buf.Bytes()}
+	for _, b := range body {
+		buf := bytes.NewBuffer(nil)
+		writeVarInt(buf, 0x00)
+		writeVarInt(buf, uint64(len(b)))
+		buf.Write(b)
+		frames = append(frames, buf.Bytes())
+	}
+	return
 }
 
 func setupSession(session quic.EarlyConnection) error {
