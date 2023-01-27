@@ -11,7 +11,13 @@ import (
 	"golang.org/x/net/http2/hpack"
 )
 
-func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (response *HTTPMessage, err error) {
+func sendHTTP2Request(
+	connectAddr, serverName string,
+	noTLS bool,
+	request *HTTPMessage,
+	timeout, bodyPartsDelay time.Duration,
+	skipBodyEndFind bool) (response *HTTPMessage, err error) {
+
 	address := connectAddr
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
 		address = net.JoinHostPort(address, "443")
@@ -33,7 +39,6 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	}
 
 	defer func() { _ = tcpConn.Close() }()
-	_ = tcpConn.SetDeadline(time.Now().Add(timeout))
 
 	var c net.Conn
 
@@ -47,8 +52,15 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 		})
 	}
 
-	if _, err := c.Write(prepareHTTP2Request(request)); err != nil {
-		return nil, err
+	parts := prepareHTTP2Request(request, skipBodyEndFind)
+	for idx, part := range parts {
+		_ = tcpConn.SetDeadline(time.Now().Add(timeout))
+		if _, err := c.Write(part); err != nil {
+			return nil, err
+		}
+		if idx < len(parts)-1 {
+			time.Sleep(bodyPartsDelay)
+		}
 	}
 
 	response = &HTTPMessage{}
@@ -109,7 +121,7 @@ func sendHTTP2Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	return
 }
 
-func prepareHTTP2Request(request *HTTPMessage) []byte {
+func prepareHTTP2Request(request *HTTPMessage, skipBodyEndFlag bool) [][]byte {
 	var hpackBuf []byte
 	for i := range request.Headers {
 		hpackBuf = hpackAppendHeader(hpackBuf, &request.Headers[i])
@@ -117,6 +129,7 @@ func prepareHTTP2Request(request *HTTPMessage) []byte {
 
 	requestBuf := bytes.NewBuffer(nil)
 	requestBuf.Write([]byte(http2.ClientPreface))
+	boundaries := []int{0}
 
 	framer := http2.NewFramer(requestBuf, nil)
 
@@ -130,26 +143,43 @@ func prepareHTTP2Request(request *HTTPMessage) []byte {
 	_ = framer.WriteHeaders(http2.HeadersFrameParam{
 		StreamID:      1,
 		BlockFragment: hpackBuf,
-		EndStream:     len(request.Body) == 0,
+		EndStream:     len(request.Body) == 0 && !skipBodyEndFlag,
 		EndHeaders:    true,
 	})
 
 	for i, b := range request.Body {
+		boundaries = append(boundaries, requestBuf.Len())
 		lastChunk := i == len(request.Body)-1
 		start := 0
-		for start < len(b) {
+		for {
 			end := start + 65536
 			if end > len(b) {
 				end = len(b)
 			}
-			_ = framer.WriteData(1, lastChunk && end == len(b), b[start:end])
+			bodyEnd := !skipBodyEndFlag && lastChunk && end == len(b)
+			_ = framer.WriteData(1, bodyEnd, b[start:end])
 			start = end
+			if start >= len(b) {
+				break
+			}
 		}
 	}
 
+	if len(boundaries) > 1 {
+		boundaries = append(boundaries, requestBuf.Len())
+	}
 	_ = framer.WriteSettingsAck()
+	boundaries = append(boundaries, requestBuf.Len())
 
-	return requestBuf.Bytes()
+	var (
+		parts       [][]byte
+		streamBytes = requestBuf.Bytes()
+	)
+	for i := 0; i < len(boundaries)-1; i++ {
+		parts = append(parts, streamBytes[boundaries[i]:boundaries[i+1]])
+	}
+
+	return parts
 }
 func hpackAppendHeader(dst []byte, h *Header) []byte {
 	dst = append(dst, 0x10)

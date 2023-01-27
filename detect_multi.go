@@ -13,11 +13,14 @@ func detectMultipleTargets(targets []string,
 	timeout time.Duration,
 	csv *CSVLogWriter,
 	verbose bool) error {
+
 	if len(targets) == 0 {
 		return fmt.Errorf("no targets specified")
 	}
 
-	rand.Shuffle(len(targets), func(i, j int) { targets[i], targets[j] = targets[j], targets[i] })
+	rand.Shuffle(len(targets),
+		func(i, j int) { targets[i], targets[j] = targets[j], targets[i] },
+	)
 
 	queue := make(chan *DetectParams, threads)
 

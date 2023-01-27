@@ -24,7 +24,12 @@ var DetectMethods = []DetectMethod{
 	DetectContentLengthParsing,
 }
 
-func (d DetectMethod) GetRequests(sm SmugglingMethod, target *url.URL, smuggleVariant SmugglingVariant) (valid, invalid DetectRequestParams) {
+func (d DetectMethod) GetRequests(
+	sm SmugglingMethod,
+	target *url.URL,
+	smuggleVariant SmugglingVariant,
+) (valid, invalid DetectRequestParams) {
+
 	switch d {
 	case DetectContentLengthParsing:
 		valid.AdditionalHeaders = Headers{{"content-length", "1"}}

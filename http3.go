@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
@@ -15,7 +16,12 @@ import (
 	"golang.org/x/net/context"
 )
 
-func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPMessage, timeout time.Duration) (response *HTTPMessage, err error) {
+func sendHTTP3Request(
+	connectAddr, serverName string,
+	request *HTTPMessage,
+	timeout, bodyPartsDelay time.Duration,
+	skipStreamClosing bool) (response *HTTPMessage, err error) {
+
 	address := connectAddr
 	if _, _, err := net.SplitHostPort(connectAddr); err != nil {
 		address = net.JoinHostPort(address, "443")
@@ -40,26 +46,24 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	}
 	defer func() { _ = udpConn.Close() }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		_ = udpConn.Close()
-	}()
-
 	udpAddr := &net.UDPAddr{
 		IP:   ip,
 		Port: portInt,
 	}
 
-	session, err := quic.DialEarlyContext(ctx, udpConn, udpAddr, serverName,
+	connectCxt, cancelConnectCtx := context.WithTimeout(context.Background(), timeout)
+	defer cancelConnectCtx()
+
+	session, err := quic.DialEarlyContext(connectCxt, udpConn, udpAddr, serverName,
 		&tls.Config{
 			NextProtos:         []string{"h3", "h3-29"},
 			ServerName:         serverName,
 			InsecureSkipVerify: true,
 		},
 		&quic.Config{
-			Versions:           []quic.VersionNumber{quic.Version1, quic.VersionDraft29},
+			Versions: []quic.VersionNumber{
+				quic.VersionDraft29, quic.Version1, quic.Version2,
+			},
 			MaxIncomingStreams: -1,
 		})
 
@@ -75,13 +79,27 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 		return nil, err
 	}
 	frames := prepareHTTP3Request(request)
-	for _, f := range frames {
+
+	for idx, f := range frames {
 		_, _ = requestStream.Write(f)
+		if idx < len(frames)-1 {
+			time.Sleep(bodyPartsDelay)
+		}
 	}
 
-	if err := requestStream.Close(); err != nil {
-		return nil, err
+	if !skipStreamClosing {
+		if err := requestStream.Close(); err != nil {
+			return nil, err
+		}
 	}
+
+	timeoutCtx, cancelTimeoutCtx := context.WithTimeout(context.Background(), timeout)
+	defer cancelTimeoutCtx()
+
+	go func() {
+		<-timeoutCtx.Done()
+		_ = udpConn.Close()
+	}()
 
 	var (
 		headers Headers
@@ -97,7 +115,7 @@ func sendHTTP3Request(connectAddr, serverName string, noTLS bool, request *HTTPM
 	for {
 		frame, err := readFrame(b)
 		if err != nil {
-			if ctx.Err() != nil {
+			if timeoutCtx.Err() != nil {
 				return nil, TimeoutError{}
 			}
 
@@ -256,7 +274,8 @@ func readVarInt(b io.ByteReader) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint64(b8) + uint64(b7)<<8 + uint64(b6)<<16 + uint64(b5)<<24 + uint64(b4)<<32 + uint64(b3)<<40 + uint64(b2)<<48 + uint64(b1)<<56, nil
+	return uint64(b8) + uint64(b7)<<8 + uint64(b6)<<16 + uint64(b5)<<24 +
+		uint64(b4)<<32 + uint64(b3)<<40 + uint64(b2)<<48 + uint64(b1)<<56, nil
 }
 
 func writeVarInt(b *bytes.Buffer, i uint64) {
@@ -274,4 +293,9 @@ func writeVarInt(b *bytes.Buffer, i uint64) {
 	} else {
 		panic(fmt.Sprintf("%#x doesn't fit into 62 bits", i))
 	}
+}
+
+func init() {
+	// sorry folks
+	_ = os.Setenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING", "True")
 }

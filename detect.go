@@ -53,7 +53,11 @@ func (r DetectResult) String() string {
 	}
 }
 
-func Detect(params *DetectParams, connectTo string, timeout time.Duration, verbose bool) (DetectResult, error) {
+func Detect(params *DetectParams,
+	connectTo string,
+	timeout time.Duration,
+	verbose bool) (DetectResult, error) {
+
 	u, err := url.Parse(params.Target)
 	if err != nil {
 		return Indistinguishable, err

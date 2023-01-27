@@ -29,6 +29,9 @@ func main() {
 		autoContentLength bool
 		bodyToSend        [][]byte
 		bodyLines         int
+		bodyPartsDelay    time.Duration
+		skipBodyEndFlag   bool
+
 		// detect subcommand options
 		verbose     bool
 		threads     int
@@ -75,7 +78,10 @@ func main() {
 					parts = strings.SplitN(parts[1], ":", 2)
 					parts[0] = ":" + parts[0]
 				}
-				headers = append(headers, Header{maybeUnquoteArg(parts[0]), maybeUnquoteArg(parts[1])})
+				headers = append(headers, Header{
+					Name:  maybeUnquoteArg(parts[0]),
+					Value: maybeUnquoteArg(parts[1]),
+				})
 			}
 
 			doAndPrintRequest(&RequestParams{
@@ -88,6 +94,8 @@ func main() {
 				AddContentLength: autoContentLength,
 				Body:             bodyToSend,
 				Timeout:          timeout,
+				BodyPartsDelay:   bodyPartsDelay,
+				SkipBodyEndFlag:  skipBodyEndFlag,
 			}, bodyLines)
 			return nil
 		},
@@ -157,6 +165,8 @@ func main() {
 	requestCmd.Flags().BoolVar(&noUserAgent, "no-user-agent", false, "don't send user-agent")
 	requestCmd.Flags().BoolVar(&autoContentLength, "auto-content-length", false, "add \"content-length\" header with body size")
 	requestCmd.Flags().IntVar(&bodyLines, "body-lines", 10, "how many body lines to print (-1 means no limit)")
+	requestCmd.Flags().DurationVar(&bodyPartsDelay, "body-parts-delay", 0, "delay between body parts")
+	requestCmd.Flags().BoolVar(&skipBodyEndFlag, "skip-body-end", false, "don't send body end flag (usually results in a timeout)")
 
 	detectCmd.Flags().BoolVar(&verbose, "verbose", false, "be more verbose")
 	detectCmd.Flags().IntVar(&threads, "threads", 100, "number of threads")

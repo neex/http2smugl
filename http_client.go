@@ -16,6 +16,8 @@ type RequestParams struct {
 	Body                [][]byte
 	Timeout             time.Duration
 	AddContentLength    bool
+	BodyPartsDelay      time.Duration
+	SkipBodyEndFlag     bool
 }
 
 type HTTPMessage struct {
@@ -110,9 +112,21 @@ func DoRequest(params *RequestParams) (*HTTPMessage, error) {
 
 	switch proto {
 	case "http2":
-		return sendHTTP2Request(targetAddr, params.Target.Host, false, &HTTPMessage{headers, params.Body}, params.Timeout)
+		return sendHTTP2Request(targetAddr,
+			params.Target.Host,
+			false,
+			&HTTPMessage{headers, params.Body},
+			params.Timeout,
+			params.BodyPartsDelay,
+			params.SkipBodyEndFlag)
+
 	case "http3":
-		return sendHTTP3Request(targetAddr, params.Target.Host, false, &HTTPMessage{headers, params.Body}, params.Timeout)
+		return sendHTTP3Request(targetAddr,
+			params.Target.Host,
+			&HTTPMessage{headers, params.Body},
+			params.Timeout,
+			params.BodyPartsDelay,
+			params.SkipBodyEndFlag)
 	default:
 		panic(fmt.Errorf("invalid proto: %#v", proto))
 	}
