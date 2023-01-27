@@ -86,12 +86,14 @@ func Detect(params *DetectParams,
 		for err != nil && mayResolveInFuture(err) && triesLeft > 0 {
 			triesLeft--
 			response, err = DoRequest(&RequestParams{
-				Target:      u,
-				Method:      params.RequestMethod,
-				ConnectAddr: connectTo,
-				Headers:     request.AdditionalHeaders,
-				Body:        request.Body,
-				Timeout:     timeout,
+				Target:          u,
+				Method:          params.RequestMethod,
+				ConnectAddr:     connectTo,
+				Headers:         request.AdditionalHeaders,
+				Body:            request.Body,
+				Timeout:         timeout,
+				BodyPartsDelay:  request.BodyPartsDelay,
+				SkipBodyEndFlag: request.SkipBodyEndFlag,
 			})
 		}
 
