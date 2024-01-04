@@ -49,9 +49,15 @@ func (t TimeoutError) Temporary() bool {
 }
 
 func DoRequest(params *RequestParams) (*HTTPMessage, error) {
-	var proto string
+	var (
+		proto string
+		noTLS bool
+	)
 
 	switch params.Target.Scheme {
+	case "http+h2", "http+http2":
+		proto = "http2"
+		noTLS = true
 	case "https", "https+http2":
 		proto = "http2"
 	case "https+h3":
@@ -114,7 +120,7 @@ func DoRequest(params *RequestParams) (*HTTPMessage, error) {
 	case "http2":
 		return sendHTTP2Request(targetAddr,
 			params.Target.Host,
-			false,
+			noTLS,
 			&HTTPMessage{headers, params.Body},
 			params.Timeout,
 			params.BodyPartsDelay,

@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/lucas-clemente/quic-go"
-	"github.com/marten-seemann/qpack"
+	"github.com/quic-go/qpack"
+	"github.com/quic-go/quic-go"
 	"golang.org/x/net/context"
 )
 
@@ -54,7 +54,7 @@ func sendHTTP3Request(
 	connectCxt, cancelConnectCtx := context.WithTimeout(context.Background(), timeout)
 	defer cancelConnectCtx()
 
-	session, err := quic.DialEarlyContext(connectCxt, udpConn, udpAddr, serverName,
+	session, err := quic.DialEarly(connectCxt, udpConn, udpAddr,
 		&tls.Config{
 			NextProtos:         []string{"h3", "h3-29"},
 			ServerName:         serverName,
@@ -62,7 +62,7 @@ func sendHTTP3Request(
 		},
 		&quic.Config{
 			Versions: []quic.VersionNumber{
-				quic.VersionDraft29, quic.Version1, quic.Version2,
+				quic.Version1, quic.Version2,
 			},
 			MaxIncomingStreams: -1,
 		})
