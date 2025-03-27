@@ -61,7 +61,7 @@ func sendHTTP3Request(
 			InsecureSkipVerify: true,
 		},
 		&quic.Config{
-			Versions: []quic.VersionNumber{
+			Versions: []quic.Version{
 				quic.Version1, quic.Version2,
 			},
 			MaxIncomingStreams: -1,
